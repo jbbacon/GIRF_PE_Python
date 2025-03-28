@@ -1,6 +1,29 @@
 # GIRF_PE_Python
 Python code to obtain GIRF including sequence, processing and calculation 
 
+## Installation and dependencies
+1. Install [Pixi](https://pixi.sh) as described [online](https://pixi.sh/latest/), e.g.
+
+```
+curl -fsSL https://pixi.sh/install.sh | bash
+```
+
+2. Clone this repository
+```
+git clone https://github.com/jbbacon/GIRF_PE_Python.git
+```
+
+3. CD to directory
+```
+cd GIRF_PE_Python
+```
+
+4. Run a scrip using `pixi run {script}```. For example
+```
+pixi run python Pypulseq_GIRF_PE.py
+```
+
+## Contents
 Pypulseq_GIRF_PE.py - this is the first script to run. This creates the .seq file which can be used on the scanner to collect the GIRF data. 
 Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html for the optimised GIRF calcualtion and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. 
 Notes: Leave RTri and RRef = 1, the averaging is done by the phase encoding. Script is written to generate data in 1 direction at a time. Needs to be run 3 times for x, y and z directions. Scan Time ~2 hours per direction. 
