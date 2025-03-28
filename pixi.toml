@@ -6,6 +6,7 @@ platforms = ["osx-arm64"]
 version = "0.1.0"
 
 [tasks]
+gen-seq = "python Pypulseq_GIRF_PE.py"
 
 [dependencies]
 python = "3.12.*"
