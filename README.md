@@ -13,14 +13,18 @@ curl -fsSL https://pixi.sh/install.sh | bash
 git clone https://github.com/jbbacon/GIRF_PE_Python.git
 ```
 
-3. CD to directory
+3. Change to the cloned directory
 ```
 cd GIRF_PE_Python
 ```
 
-4. Run a scrip using `pixi run {script}```. For example
+4. Run a script using `pixi run python {script}```. For example
 ```
 pixi run python Pypulseq_GIRF_PE.py
+```
+_or_ use one of the predefined tasks
+```
+pixi run gen-seq
 ```
 
 ## Contents
