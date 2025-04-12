@@ -29,7 +29,6 @@ def calculate_output_gradient_optimized(sigS1_POS, sigS1_NEG, sigS2_POS, sigS2_N
     
     # Compute the temporal derivative of the phase of the signals
     # unwrap is used to handle phase jumps
- 
     sigS1Diff_POS = np.diff(np.unwrap(np.angle(sigS1Corrected_POS), axis=0), axis=0) / (params['adcDwellTime'] / 1e6)
     sigS1Diff_NEG = np.diff(np.unwrap(np.angle(sigS1Corrected_NEG), axis=0), axis=0) / (params['adcDwellTime'] / 1e6)
     sigS2Diff_POS = np.diff(np.unwrap(np.angle(sigS2Corrected_POS), axis=0), axis=0) / (params['adcDwellTime'] / 1e6)
@@ -50,7 +49,6 @@ def calculate_output_gradient_optimized(sigS1_POS, sigS1_NEG, sigS2_POS, sigS2_N
         gradOutput = gradOutput / (params['gammabar'] * 2 * np.pi)
     else: 
         print('Error: Select Linear as True or False ')  
-
 
     # Convert to single precision (float32)
     gradOutput = gradOutput.astype(np.float32)

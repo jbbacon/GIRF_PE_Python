@@ -36,12 +36,6 @@ def read_multi_files(var_name, *file_paths, N, F):
 
     first_var = first_var[N:F, ...]
 
-    # Retrieve the metadata from the first file
-    ro_pts = data['roPts']
-    nch = data['nch']
-    dwell_time = data['dwellTime']
-    xpts = first_var.shape[0]
-
     # Initialize the output list with the first variable
     result = [first_var]
 
