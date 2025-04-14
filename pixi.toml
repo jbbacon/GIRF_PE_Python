@@ -7,6 +7,8 @@ version = "0.1.0"
 
 [tasks]
 gen-seq = "python Pypulseq_GIRF_PE.py"
+proc-data = "python GIRF_PE_Processing.py"
+get-girf = "python PE_script_OptimizedGIRFCalculation.py"
 
 [dependencies]
 python = "3.12.*"
@@ -16,5 +18,5 @@ scipy = ">=1.15.2,<2"
 fsl_mrs = ">=2.4.3,<3"
 
 [pypi-dependencies]
-pypulseq = ">=1.4.2.post1, <2"
+pypulseq = { git = "https://github.com/imr-framework/pypulseq.git" }
 twixtools = ">=0.23, <0.24"

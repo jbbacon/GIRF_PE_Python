@@ -4,48 +4,57 @@ Pypulseq code to generate the pulse sequence for GIRF calcualtion
 Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html for the optimised GIRF calculation 
 and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 5*5 phase encoding
 
-Takes approximately 2 hours per direction   
+Scan time is approximately 2 hours per direction for full usage
 """
 
+import argparse
+from pathlib import Path
+
+parser = argparse.ArgumentParser(description='GIRF Sequence Generation.')
+parser.add_argument('--direction', choices=['x', 'y', 'z'], default='z', required=True, help='Primary GIRF direction')
+parser.add_argument('--output', type=Path, required=True, help='Output folder to save .seq file and additional parameter requirements')
+parser.add_argument('--batch_size', type=int, default=3, help='Number of triangle pulses used between references')
+parser.add_argument('--n', type=int, default=5, help='Number of phase encodes (Nx = Ny = n)')
+parser.add_argument('--slice_thickness', type=float, default=1, help='Slice thickness in millimeters')
+parser.add_argument('--fov', type=float, default=200e-3, help='Field of view in meters')
+parser.add_argument('--slice_offset', type=float, default=17, help='Magnitude of slice offset in millimeters (positive and negative will be used)')
+parser.add_argument('--num_triangles', type=int, choices=[6, 9, 18], default=18, help='Number of triangle gradients (6, 9, or 18)')
+parser.add_argument('--no_save', action='store_false', dest='save', help='Flag to not save output files.')
+parser.add_argument('--plot', action='store_true', help='Plot the sequence timing diagram if specified.')
+parser.add_argument('--plot_range', type=float, nargs=2, metavar=('START', 'END'), default=(0, 200),help='Time range for plotting in seconds, used only if --plot is specified.')
+args = parser.parse_args()
+
+
+# Imports after argparse for speed of inital use
 import pypulseq as pp
 import numpy as np
 import itertools
 import csv
 import os
-import argparse
-import scipy.io as sio
+import json
 
-parser = argparse.ArgumentParser(description='GIRF Sequence Generation.')
-parser.add_argument('--direction', choices=['x', 'y', 'z'], default='z', required=True, help='Primary GIRF direction')
-parser.add_argument('--output', type=str, required=True, help='Output folder to save .seq .csv and .mat files')
-parser.add_argument('--batch_size', type=int, default=3, help='Number of triangle pulses per batch')
-parser.add_argument('--n', type=int, default=5, help='Number of phase encodes (Nx = Ny = n)')
-parser.add_argument('--slice_thickness', type=float, default=1e-3, help='Slice thickness in meters')
-parser.add_argument('--fov', type=float, default=200e-3, help='Field of view in meters')
-parser.add_argument('--slice_offset', type=float, default=17e-3, help='Magnitude of slice offset in meters (positive and negative will be used)')
-parser.add_argument('--num_triangles', type=int, choices=[6, 9, 18], default=18, help='Number of triangle gradients (6, 9, or 18)')
-parser.add_argument('--save', type=lambda x: x.lower() == 'true', default=True, help='Whether to save output files (true/false)')
-parser.add_argument('--plot', action='store_true', help='Plot the sequence timing diagram if specified.')
-parser.add_argument('--plot_range', type=float, nargs=2, metavar=('START', 'END'), default=(0, 200),help='Time range for plotting in ms, used only if --plot is specified.')
-args = parser.parse_args()
+# Make output directory
+args.output.mkdir(exist_ok=True, parents=True)
 
 Nx = Ny = args.n
 fov = args.fov
-slice_thickness = args.slice_thickness
-slice_offsets = [args.slice_offset, -args.slice_offset]
+slice_thickness = args.slice_thickness/1000
+slice_offset = args.slice_offset/1000
+slice_offsets = [slice_offset, -slice_offset]
 deltak = 1 / fov
 
 # Set directions and FOV ordering
 if args.direction == 'z':
     directions = ['z', 'x', 'y']
-    fov_vector = [fov, fov, 2*args.slice_offset]
+    fov_vector = [fov, fov, 2*slice_offset]
 elif args.direction == 'y':
     directions = ['y', 'z', 'x']
-    fov_vector = [fov, 2*args.slice_offset, fov]
+    fov_vector = [fov, 2*slice_offset, fov]
 else:
     directions = ['x', 'y', 'z']
-    fov_vector = [2*args.slice_offset, fov, fov]
+    fov_vector = [2*slice_offset, fov, fov]
 
+# Log for pulse ordering files
 def write_log(pulse_log, log_file):
     fieldnames = ['batch_index', 'type', 'j', 'k', 'slice_offset', 'amplitude_sign', 'triangular_amplitude_mT/m']
     file_exists = os.path.isfile(log_file)
@@ -55,27 +64,24 @@ def write_log(pulse_log, log_file):
             writer.writeheader()
         writer.writerows(pulse_log)
 
+# Saving additional parameters needed for analysis 
 def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
     if save_flag:
-        # Create a dictionary to store the triangular amplitudes and n
+        # Create a dictionary to store the triangular amplitudes and phase encode steps
         data = {
-            'triangular_amplitudes': np.array(triangular_amplitudes),
+            'triangular_amplitudes': np.array(triangular_amplitudes).tolist(),
             'n': Nx,  # Store the number of phase encode steps (n)
-            'slice_offset': args.slice_offset
+            'slice_offset': slice_offset
         }
         
-        # Ensure the output folder exists
         os.makedirs(output_folder, exist_ok=True)
 
-        # Create the output .mat file path
-        output_mat_file = os.path.join(output_folder, 'parameters.mat')
-        
-        # Save the data into the .mat file
-        sio.savemat(output_mat_file, data)
+        with open(output_folder / 'parameters.json', 'w') as fp:
+            json.dump(data, fp)
 
-        print(f"Parameters saved to {output_mat_file}")
+        print(f"Parameters saved to {output_folder / 'parameters.json'}")
     else:
-        print("Save flag is set to False. Skipping saving triangular amplitudes and n.")
+        print("Save flag is set to False. Skipping saving tof parameters.")
 
 def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag):
     pulse_log = []
@@ -198,26 +204,14 @@ def create_triangular_wave(amplitude, step_size=1.8, length=4000):
 def save_triangular_waves(triangular_amplitudes, output_folder, save_flag):
     if save_flag:
         # Create a list to store all the triangular waveforms
-        all_triangles = []
+        all_triangles_matrix = np.asarray(
+            [create_triangular_wave(amp) for amp in triangular_amplitudes]).T
         
-        for amplitude in triangular_amplitudes:
-            triangle_wave = create_triangular_wave(amplitude)
-            all_triangles.append(triangle_wave)
-        
-        # Convert the list of waveforms into a 2D NumPy array
-        all_triangles_matrix = np.array(all_triangles).T  # Transpose to match required format
-        
-        # Ensure the output folder exists
-        os.makedirs(output_folder, exist_ok=True)
-        
-        # Create the output .mat file path
-        output_mat_file = os.path.join(output_folder, 'InputGradients.mat')
-        
-        # Save the matrix into a .mat file
-        sio.savemat(output_mat_file, {'gradIn_all': all_triangles_matrix})
-        print(f"Triangular waves saved to {output_mat_file}")
+        np.savez_compressed(output_folder / 'InputGradients.npz', gradIn_all = all_triangles_matrix)
+
+        print(f"Triangular waves saved to {output_folder / 'InputGradients.npz'}")
     else:
-        print("Save flag is set to False. Skipping saving the .mat file.")
+        print("Save flag is set to False. Skipping saving the .npz file.")
 
 # Validate batch size compatibility
 if args.num_triangles % args.batch_size != 0:
@@ -239,7 +233,7 @@ elif args.num_triangles == 6:
 else:
     raise ValueError("num_triangles must be one of 6, 9, or 18")
 
-# Save the triangular waveforms to a .mat file if --save is True
+# Save the triangular waveforms to a .npz file if --save is True
 save_triangular_waves(triangular_amplitudes, args.output, args.save)
 
 # Init sequence

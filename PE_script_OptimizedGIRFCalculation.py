@@ -6,21 +6,24 @@ See help_functions_GIRF for the calculation steps
 
 import numpy as np
 import os
-import scipy.io as sio
 import matplotlib.pyplot as plt
-from help_functions_GIRF import calculate_output_gradient_optimized, display_girf_magnitude, read_multi_files, resamp_gradients
-from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset
-from scipy.interpolate import CubicSpline
+from help_functions_GIRF import calculate_output_gradient_optimized, display_girf_magnitude, read_multi_files, resamp_gradients, shift_half_index_spline
 import argparse
 
 parser = argparse.ArgumentParser(description='Compute and save GIRF from gradient data.')
 
-parser.add_argument('--data_path', type=str, required=True, help='Path to folder containing .mat input files.')
+parser.add_argument('--data_path', type=str, required=True, help='Path to folder containing .npz input files.')
 parser.add_argument('--gradient_axis', type=str, choices=['x', 'y', 'z'], required=True, help='Gradient axis (x, y, or z).')
-parser.add_argument('--linear', action='store_true', help='Use linear term. If not set, computes B0 term.')
-parser.add_argument('--save', action='store_true', help='Save results to .mat file.')
-parser.add_argument('--plot', action='store_true', help='Display plot of GIRF.')
-parser.add_argument('--save_path', type=str, default=None, help='Optional path to save output files.')
+parser.add_argument('--save', dest='save', action='store_true', help='Save results to Results Folder (default: True).')
+parser.add_argument('--no-save', dest='save', action='store_false', help='Disable saving results.')
+parser.set_defaults(save=True)
+parser.add_argument('--plot', dest='plot', action='store_true', help='Display plot of GIRF (default: True).')
+parser.add_argument('--no-plot', dest='plot', action='store_false', help='Disable plot display.')
+parser.set_defaults(plot=True)
+parser.add_argument('--linear', dest='linear', action='store_true', help='Use linear term (default: True).')
+parser.add_argument('--b0', dest='linear', action='store_false', help='Compute B0 term instead.')
+parser.set_defaults(linear=True)
+parser.add_argument('--save_path', type=str, default=None, help='Optional path to save output files. It will default to a results folder inside the input folder.')
 parser.add_argument('--n', type=int, default=0, help='Number of cutoff points to account for ringing effects.')
 parser.add_argument('--f', type=int, default=30000, help='Number of data points to include (resolution vs noise tradeoff).')
 
@@ -48,39 +51,31 @@ if gradientAxis not in ['x', 'y', 'z']:
 # Setting data path and file names according to user selections
 full_data_path = dataPath
 
-#Used later for calibration 
-def shift_half_index_spline(array, shift):
-    N = len(array)
-    x = np.arange(N)
-    spline = CubicSpline(x, array, bc_type='natural')
-    x_shifted = x +shift   # Shift by half an index
-    return spline(x_shifted)  # Evaluate shifted function
-
 # File paths based on the gradient axis
 if gradientAxis == 'x':
-    fn_Slice1_POS = 'Positive+xslice.mat'
-    fn_Slice1_NEG = 'Negative+xslice.mat'
-    fn_Slice2_POS = 'Positive-xslice.mat'
-    fn_Slice2_NEG = 'Negative-xslice.mat'
-    fn_Slice1_ref = 'Ref+xslice.mat'
-    fn_Slice2_ref = 'Ref-xslice.mat'
+    fn_Slice1_POS = 'Positive+xslice.npz'
+    fn_Slice1_NEG = 'Negative+xslice.npz'
+    fn_Slice2_POS = 'Positive-xslice.npz'
+    fn_Slice2_NEG = 'Negative-xslice.npz'
+    fn_Slice1_ref = 'Ref+xslice.npz'
+    fn_Slice2_ref = 'Ref-xslice.npz'
 elif gradientAxis == 'y':
-    fn_Slice1_POS = 'Positive+yslice.mat'
-    fn_Slice1_NEG = 'Negative+yslice.mat'
-    fn_Slice2_POS = 'Positive-yslice.mat'
-    fn_Slice2_NEG = 'Negative-yslice.mat'
-    fn_Slice1_ref = 'Ref+yslice.mat'
-    fn_Slice2_ref = 'Ref-yslice.mat'
+    fn_Slice1_POS = 'Positive+yslice.npz'
+    fn_Slice1_NEG = 'Negative+yslice.npz'
+    fn_Slice2_POS = 'Positive-yslice.npz'
+    fn_Slice2_NEG = 'Negative-yslice.npz'
+    fn_Slice1_ref = 'Ref+yslice.npz'
+    fn_Slice2_ref = 'Ref-yslice.npz'
 else:  # Z-axis
-    fn_Slice1_POS = 'Positive+zslice.mat'
-    fn_Slice1_NEG = 'Negative+zslice.mat'
-    fn_Slice2_POS = 'Positive-zslice.mat'
-    fn_Slice2_NEG = 'Negative-zslice.mat'
-    fn_Slice1_ref = 'Ref+zslice.mat'
-    fn_Slice2_ref = 'Ref-zslice.mat'
+    fn_Slice1_POS = 'Positive+zslice.npz'
+    fn_Slice1_NEG = 'Negative+zslice.npz'
+    fn_Slice2_POS = 'Positive-zslice.npz'
+    fn_Slice2_NEG = 'Negative-zslice.npz'
+    fn_Slice1_ref = 'Ref+zslice.npz'
+    fn_Slice2_ref = 'Ref-zslice.npz'
 
 # Load gradient waveforms
-fn_gradient = 'InputGradients.mat'
+fn_gradient = 'InputGradients.npz'
 
 # Full file paths
 fn_slice1_pos = os.path.join(full_data_path, fn_Slice1_POS)
@@ -105,14 +100,17 @@ raw_sig_s1_pos, raw_sig_s1_neg, raw_sig_s2_pos, raw_sig_s2_neg, ref_s1, ref_s2 =
 )
 
 #Load in input gradients 
-grad_in_all = sio.loadmat(fn_gradient)['gradIn_all']
-slice_offset = sio.loadmat(fn_slice1_pos)['slice_offset']
+with np.load(fn_gradient) as grad_data:
+    grad_in_all = grad_data['gradIn_all']
+
+with np.load(fn_slice1_pos) as slice_data:
+    slice_offset = slice_data['slice_offset']
 
 # Step 2: Processing gradient inputs
 params['roPts'] = f-n
 params['nRep'] = raw_sig_s1_pos.shape[1]   # Number of PE, this refers to number of PE (25=5*5)
 params['nGradAmp'] = raw_sig_s1_pos.shape[2]  # Number of gradient blips (18)
-params['slicePos'] = slice_offset[0]     # distance of slices from isocenter in meters
+params['slicePos'] = slice_offset     # distance of slices from isocenter in meters
 
 # Resample gradients using the helper function `resamp_gradients`
 gResamp, roTime = resamp_gradients(grad_in_all, params)
@@ -120,7 +118,7 @@ gResamp, roTime = resamp_gradients(grad_in_all, params)
 # The nominal starting time of the blips is 2000us after ADC starts
 timeShift = 1990 - n*5 # in microseconds (1990 is used not 2000 due to ADC calibration )
 if timeShift < 0:
-    print('Error: timeShift is Negative')
+    raise ValueError("Error: timeShift is negative. Check value of n.")
 
 gradInput = np.roll(gResamp, int(timeShift / params['adcDwellTime']), axis=0)
 
@@ -137,10 +135,9 @@ rawSigS1_NEG = np.transpose(raw_sig_s1_neg, (0, 2, 1))
 rawSigS2_POS = np.transpose(raw_sig_s2_pos, (0, 2, 1))
 rawSigS2_NEG = np.transpose(raw_sig_s2_neg, (0, 2, 1))
 
+# Obtains the middle index corresponing to the centre of the slice
 pre_index = (len(rawSigS1_NEG[0,0,:]))
 index = int((pre_index-1)/2)
-
-#To view mutiple GIRFS from the phase encoding jsut add the correct position 
 
 rawSigS1_POS1= rawSigS1_POS[:,:,index:index+1]
 rawSigS1_NEG1= rawSigS1_NEG[:,:,index:index+1]
@@ -182,17 +179,17 @@ if Plotting ==True:
 if not os.path.exists(dataSavePath):
     os.makedirs(dataSavePath)
 
-# Save results to the specified path
-if Linear == True:
-    file_name = f'GIRFOptimized_G{gradientAxis.upper()}Linear.mat'
-    file_path = os.path.join(dataSavePath, file_name)
-else: 
-    file_name = f'GIRFOptimized_G{gradientAxis.upper()}B0.mat'
-    file_path = os.path.join(dataSavePath, file_name)
+# Set the output file name based on gradient type
+if Linear:
+    file_name = f'GIRFOptimized_G{gradientAxis.upper()}Linear.npz'
+else:
+    file_name = f'GIRFOptimized_G{gradientAxis.upper()}B0.npz'
 
-if Save == True: 
-    # Save the required variables: GIRF_FT, params, and roTime
-    sio.savemat(file_path, {'GIRF_FT': GIRF_FT, 'params': params, 'roTime': roTime, 'freqFull': freqFull})
+file_path = os.path.join(dataSavePath, file_name)
+
+if Save:
+    # Save the required variables: GIRF_FT, params, roTime, freqFull
+    np.savez(file_path, GIRF_FT=GIRF_FT, params=params, roTime=roTime, freqFull=freqFull)
 
     # Optional: Debugging output
     print(f"Results saved to: {file_path}")

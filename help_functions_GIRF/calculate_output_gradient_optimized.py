@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 def calculate_output_gradient_optimized(sigS1_POS, sigS1_NEG, sigS2_POS, sigS2_NEG, refS1, refS2, params, Linear = True):
     # Extract the necessary sizes

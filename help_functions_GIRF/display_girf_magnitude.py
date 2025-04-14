@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset
 
 
 def display_girf_magnitude(GIRF_FT, fullFreqRange, dispFreqRange=None, Linear= True):
