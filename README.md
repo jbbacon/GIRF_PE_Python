@@ -52,9 +52,11 @@ The function will output the .seq file, a .csv containing information about the 
 
 Run the script through terminal as
 ```
-pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_order_log_x.csv --json_file /path/to/parameters.json
+pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_order_log_x.csv
 
- --npz_file /path/to/InputGradients.npz --direction x --output_folder /path/to/output/folder
+--json_file /path/to/parameters.json --npz_file /path/to/InputGradients.npz
+
+--direction x --output_folder /path/to/output/folder
 ```
 
 This will again need to be run 3 times for the 3 directions. 
