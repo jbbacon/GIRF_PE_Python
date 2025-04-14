@@ -1,6 +1,33 @@
 # GIRF_PE_Python
 Full Python code and terminal integration to generate the GIRF sequence, process the data from the scanner, calculate and view the GIRF.
 
+## Installation and dependencies
+1. Install [Pixi](https://pixi.sh) as described [online](https://pixi.sh/latest/), e.g.
+
+```
+curl -fsSL https://pixi.sh/install.sh | bash
+```
+
+2. Clone this repository
+```
+git clone https://github.com/jbbacon/GIRF_PE_Python.git
+```
+
+3. Change to the cloned directory
+```
+cd GIRF_PE_Python
+```
+
+4. Run a script using `pixi run python {script}```. For example
+```
+pixi run python Pypulseq_GIRF_PE.py
+```
+_or_ use one of the predefined tasks
+```
+pixi run gen-seq
+```
+
+## Contents
 Pypulseq_GIRF_PE.py - this is the first script to run. This creates the .seq file which can be used on the scanner to collect the GIRF data. 
 Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html for the optimised GIRF calcualtion and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. 
 Notes: The ADC event has 80000 points, when on the scanner this should be split up into readout events with a length of 8000. Lib Balance should also be turned off on the scanner. 
