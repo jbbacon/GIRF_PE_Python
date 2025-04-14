@@ -1,6 +1,6 @@
 # GIRF_PE_Python
 Full Python code and terminal integration to generate the GIRF sequence, process the data from the scanner, calculate and view the GIRF. No field camera/additional hardware required.
-GIRF (Gradient Impulse Response Function) as described in https://onlinelibrary.wiley.com/doi/pdfdirect/10.1002/mrm.24263
+GIRF (Gradient Impulse Response Function) as described in https://onlinelibrary.wiley.com/doi/pdfdirect/10.1002/mrm.24263.
 
 ## Installation and dependencies
 1. Install [Pixi](https://pixi.sh) as described [online](https://pixi.sh/latest/), e.g.
@@ -48,7 +48,7 @@ The function will output the .seq file, a .csv containing information about the 
 
 ---
 
-**GIRF_PE_Processing.py** - This process the raw scanner data performing coil combination, 2D Fourier Transform and aranging the data into a sensible format. This may take ~10 minutes to run per direction.
+**GIRF_PE_Processing.py** - This process the raw scanner data (currently only Siemens) performing coil combination, 2D Fourier Transform and arranging the data into a sensible format. This may take ~10 minutes to run per direction.
 
 Run the script through terminal as
 ```
@@ -59,14 +59,14 @@ pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_or
 --direction x --output_folder /path/to/output/folder
 ```
 
-This will again need to be run 3 times for the 3 directions. 
+This will again need to be run 3 times for the 3 directions.
 
 ---
 
-**PE_script_OptimizedGIRFCalculation.py** - Main script to calculate and view the GIRF. With some minor modifications this is a translation of the MATLAB code provided in https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html https://github.com/BRAIN-TO/girfISMRM2022.git. Helper functions are all contained in help_functions_GIRF
+**PE_script_OptimizedGIRFCalculation.py** - Main script to calculate and view the GIRF. With some minor modifications this is a translation of the MATLAB code provided in https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html https://github.com/BRAIN-TO/girfISMRM2022.git. Helper functions are all contained in help_functions_GIRF.
 
-This function should be called through terminal as
+Run the script through terminal as
 ```
 pixi run get-girf --data_path /path/to/data --direction x
 ```
-Other tags to adjust the plotting, B0 or self term of the GIRF, file saving, the start point and end point of the data 
+Other tags to adjust the plotting, B0 or self term of the GIRF, file saving, the start point and end point of the data.
