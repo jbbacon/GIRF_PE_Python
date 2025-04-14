@@ -45,16 +45,20 @@ Other tags exists for plotting capability, adjusting slice thickness, slice offs
 To fully characterise the scanner this should be called 3 times with the direction being x, y, z respectively. The default options will create a sequence which is ~2 hours for each direction.
 
 The function will output the .seq file, a .csv containing information about the gradient order, a .json file containing parameters of the sequence and a .npz file containing additional gradient information.
+
 ---
 
 **GIRF_PE_Processing.py** - This process the raw scanner data performing coil combination, 2D Fourier Transform and aranging the data into a sensible format. This may take ~10 minutes to run per direction.
 
 Run the script through terminal as
 ```
-pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_order_log_x.csv --json_file /path/to/parameters.json --npz_file /path/to/InputGradients.npz --direction x --output_folder /path/to/output/folder
+pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_order_log_x.csv --json_file /path/to/parameters.json
+
+ --npz_file /path/to/InputGradients.npz --direction x --output_folder /path/to/output/folder
 ```
 
 This will again need to be run 3 times for the 3 directions. 
+
 ---
 
 **PE_script_OptimizedGIRFCalculation.py** - Main script to calculate and view the GIRF. With some minor modifications this is a translation of the MATLAB code provided in https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html https://github.com/BRAIN-TO/girfISMRM2022.git. Helper functions are all contained in help_functions_GIRF
