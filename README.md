@@ -29,34 +29,38 @@ pixi run gen-seq
 ```
 
 ## Contents
-**Pypulseq_GIRF_PE.py** - this is the first script to run. This creates the .seq file which can be used on the scanner to collect the GIRF data. 
-Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html for the optimised GIRF calcualtion and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. 
-Notes: The ADC event has 80000 points, when on the scanner this should be split up into readout events with a length of 8000. Lib Balance should also be turned off on the scanner. Scanner requires pulseq compiler >= 1.4.3. 
+**Pypulseq_GIRF_PE.py** - This creates the .seq file to be used on the scanner to collect GIRF data. 
 
-The function should be called through terrminal as 
+Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27583 for the optimised GIRF calcualtion, and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. 
 
+Notes: The ADC event has 80000 points, when on the scanner this should be split up into readout events of length of 8000. Lib Balance should be disabled on the scanner. Scanner requires pulseq compiler >= 1.4.3. 
+
+Run the script through terminal as
 ```
 pixi run gen-seq --direction x --output /path/to/output/folder
 ```
 
-Many other tags also exists for plotting capability, adjusting slice thickness, slice offset, fov, number of phase encoding steps, number of gradients. 
-To fully characterise the scanner this should be called 3 times with the direction being x, y, z respectively. 
-The function will output the .seq file, a .csv containing information about the gradient order, a .json file containing parameters of the sequence and a .npz file containing additional gradient information. The full sequence will take ~2 hours to run per primary gradient direction
+Other tags exists for plotting capability, adjusting slice thickness, slice offset, fov, number of phase encoding steps, number of gradients. 
 
+To fully characterise the scanner this should be called 3 times with the direction being x, y, z respectively. The default options will create a sequence which is ~2 hours for each direction.
 
-**GIRF_PE_Processing.py** - this takes the .dat file output from the scanner and will process it to perform coil combination, 2D Fourier Transform and arange the data into a sensible format. This may take ~10 minutes to run per direction.
+The function will output the .seq file, a .csv containing information about the gradient order, a .json file containing parameters of the sequence and a .npz file containing additional gradient information.
+---
 
-This function should be called through terminal as 
+**GIRF_PE_Processing.py** - This process the raw scanner data performing coil combination, 2D Fourier Transform and aranging the data into a sensible format. This may take ~10 minutes to run per direction.
+
+Run the script through terminal as
 ```
-pixi run proc-data --mri_file /path/to/.dat/file --csv_file /path/to/pulse_order_log_x.csv --json_file /path/to/parameters.json --npz_file /path/to/InputGradients.npz --direction x --output_folder /path/to/output/folder
+pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_order_log_x.csv --json_file /path/to/parameters.json --npz_file /path/to/InputGradients.npz --direction x --output_folder /path/to/output/folder
 ```
 
 This will again need to be run 3 times for the 3 directions. 
+---
 
-**PE_script_OptimizedGIRFCalculation.py** - Main script to use in order to obain the GIRF. With some minor modifications this is a translation of the MATLAB code provided in https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html. Helper functions are all contained in help_functions_GIRF
+**PE_script_OptimizedGIRFCalculation.py** - Main script to calculate and view the GIRF. With some minor modifications this is a translation of the MATLAB code provided in https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html https://github.com/BRAIN-TO/girfISMRM2022.git. Helper functions are all contained in help_functions_GIRF
 
 This function should be called through terminal as
 ```
 pixi run get-girf --data_path /path/to/data --direction x
 ```
-There are  many options to adjust the plotting, B0 or self term of the GIRF, file saving, the start point and end point of the data 
+Other tags to adjust the plotting, B0 or self term of the GIRF, file saving, the start point and end point of the data 
