@@ -20,10 +20,10 @@ def calculate_output_gradient_optimized(sigS1_POS, sigS1_NEG, sigS2_POS, sigS2_N
     
     # Correct the raw signals by dividing by the corresponding reference
     for nn in range(nGradAmp):
-        sigS1Corrected_POS[:, nn, :] = sigS1_POS[:, nn, :] / refS1[:, (nn // 3), :]
-        sigS1Corrected_NEG[:, nn, :] = sigS1_NEG[:, nn, :] / refS1[:, (nn // 3), :]
-        sigS2Corrected_POS[:, nn, :] = sigS2_POS[:, nn, :] / refS2[:, (nn // 3), :]
-        sigS2Corrected_NEG[:, nn, :] = sigS2_NEG[:, nn, :] / refS2[:, (nn // 3), :]
+        sigS1Corrected_POS[:, nn, :] = sigS1_POS[:, nn, :] / refS1[:, (nn // params['batch_size']), :]
+        sigS1Corrected_NEG[:, nn, :] = sigS1_NEG[:, nn, :] / refS1[:, (nn // params['batch_size']), :]
+        sigS2Corrected_POS[:, nn, :] = sigS2_POS[:, nn, :] / refS2[:, (nn // params['batch_size']), :]
+        sigS2Corrected_NEG[:, nn, :] = sigS2_NEG[:, nn, :] / refS2[:, (nn // params['batch_size']), :]
 
     
     # Compute the temporal derivative of the phase of the signals

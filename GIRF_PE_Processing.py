@@ -125,14 +125,15 @@ def load_parameters(json_file):
     with open(json_file, 'r') as f:
         data = json.load(f)
     
-    if 'triangular_amplitudes' in data and 'n' in data and 'slice_offset' in data:
+    if 'triangular_amplitudes' in data and 'n' in data and 'slice_offset' in data and 'batch_size' in data:
         triangular_amplitudes = np.array(data['triangular_amplitudes'])  # assumes list of numbers
         n = data['n']  # assumes scalar
         slice_offset = data['slice_offset']  # could be scalar, list, or array
+        batch_size_json = data['batch_size']
 
-        return triangular_amplitudes, n, slice_offset
+        return triangular_amplitudes, n, slice_offset, batch_size_json
     else:
-        raise KeyError("The JSON file does not contain the expected variables: 'triangular_amplitudes', 'n', and 'slice_offset'.")
+        raise KeyError("The JSON file does not contain the expected variables: 'triangular_amplitudes', 'n', 'slice_offset' and 'batch_size.")
     
 
 def main(args):
@@ -142,7 +143,7 @@ def main(args):
     batch_size, num_batches, num_ref, num_triangle = analyze_batches_and_types(args.csv_file)
     pattern = generate_batch_pattern(args.csv_file)
 
-    triangular_amplitudes, n, slice_offset = load_parameters(args.json_file)
+    triangular_amplitudes, n, slice_offset, batch_size_json = load_parameters(args.json_file)
 
     def ref_2dFT(input):
         input_grid = input.reshape(80000, n, n, num_batches)
@@ -184,7 +185,8 @@ def main(args):
         'nch': 1,
         'roPts': roPts,
         'roTime': roTime,
-        'slice_offset': slice_offset
+        'slice_offset': slice_offset,
+        'batch_size': batch_size_json
     }
     filename_pos = f"{args.output_folder}/Ref+{args.direction}slice.npz"
     np.savez(filename_pos, **DataRef_pos)
@@ -198,7 +200,8 @@ def main(args):
         'nch': 1,
         'roPts': roPts,
         'roTime': roTime, 
-        'slice_offset': slice_offset
+        'slice_offset': slice_offset,
+        'batch_size': batch_size_json
     }
     filename_neg = f"{args.output_folder}/Ref-{args.direction}slice.npz"
     np.savez(filename_neg, **DataRef_neg)
@@ -226,7 +229,8 @@ def main(args):
             'nch': 1,
             'roPts': roPts,
             'roTime': roTime, 
-            'slice_offset': slice_offset
+            'slice_offset': slice_offset,
+            'batch_size': batch_size_json
         }
         
         np.savez(file_paths[i], **DataTri)

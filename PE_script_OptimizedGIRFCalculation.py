@@ -13,7 +13,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Compute and save GIRF from gradient data.')
 
 parser.add_argument('--data_path', type=str, required=True, help='Path to folder containing .npz input files.')
-parser.add_argument('--gradient_axis', type=str, choices=['x', 'y', 'z'], required=True, help='Gradient axis (x, y, or z).')
+parser.add_argument('--direction', type=str, choices=['x', 'y', 'z'], required=True, help='Gradient axis (x, y, or z).')
 parser.add_argument('--save', dest='save', action='store_true', help='Save results to Results Folder (default: True).')
 parser.add_argument('--no-save', dest='save', action='store_false', help='Disable saving results.')
 parser.set_defaults(save=True)
@@ -30,7 +30,7 @@ parser.add_argument('--f', type=int, default=30000, help='Number of data points 
 args = parser.parse_args()
 
 dataPath = args.data_path
-gradientAxis = args.gradient_axis.lower()
+gradientAxis = args.direction.lower()
 Linear = args.linear
 Save = args.save
 Plotting = args.plot
@@ -106,17 +106,21 @@ with np.load(fn_gradient) as grad_data:
 with np.load(fn_slice1_pos) as slice_data:
     slice_offset = slice_data['slice_offset']
 
+with np.load(fn_slice1_pos) as batch_data:
+    batch_size = batch_data['batch_size']
+
 # Step 2: Processing gradient inputs
 params['roPts'] = f-n
 params['nRep'] = raw_sig_s1_pos.shape[1]   # Number of PE, this refers to number of PE (25=5*5)
 params['nGradAmp'] = raw_sig_s1_pos.shape[2]  # Number of gradient blips (18)
 params['slicePos'] = slice_offset     # distance of slices from isocenter in meters
+params['batch_size'] = batch_size
 
 # Resample gradients using the helper function `resamp_gradients`
 gResamp, roTime = resamp_gradients(grad_in_all, params)
 
 # The nominal starting time of the blips is 2000us after ADC starts
-timeShift = 1990 - n*5 # in microseconds (1990 is used not 2000 due to ADC calibration )
+timeShift = 1990 - n*params['adcDwellTime'] # in microseconds (1990 is used not 2000 due to ADC calibration )
 if timeShift < 0:
     raise ValueError("Error: timeShift is negative. Check value of n.")
 

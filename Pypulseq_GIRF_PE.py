@@ -71,7 +71,8 @@ def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
         data = {
             'triangular_amplitudes': np.array(triangular_amplitudes).tolist(),
             'n': Nx,  # Store the number of phase encode steps (n)
-            'slice_offset': slice_offset
+            'slice_offset': slice_offset,
+            'batch_size': args.batch_size
         }
         
         os.makedirs(output_folder, exist_ok=True)
