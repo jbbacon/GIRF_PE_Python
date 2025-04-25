@@ -166,7 +166,8 @@ GIRF_FT = numerator / denominator
 freqRange = int(round(1 / (params['adcDwellTime'] / 1e6) / 1e3)  )# Full spectrum width, in kHz
 freqFull = np.linspace(-freqRange / 2 , freqRange / 2, params['roPts'])
 #Adjust the position due to small error using linspace
-freqFull = shift_half_index_spline(freqFull, -0.5)
+if (f - n) % 2 == 0:
+    freqFull = shift_half_index_spline(freqFull, -0.5)
 
 dispFreqRange = np.array([-30, 30])  # in unit of kHz
 
