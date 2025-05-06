@@ -5,6 +5,8 @@ Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html fo
 and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 5*5 phase encoding
 
 Scan time is approximately 2 hours per direction for full usage
+
+Terminal Command: pixi run gen-seq --direction x --output /path/to/output/folder
 """
 
 import argparse

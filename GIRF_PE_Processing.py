@@ -1,3 +1,6 @@
+#Run as pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_order_log_x.csv --json_file /path/to/parameters.json --npz_file /path/to/InputGradients.npz --direction x --output_folder /path/to/output/folder
+
+
 import argparse
 import numpy as np
 import pandas as pd
@@ -239,7 +242,7 @@ def main(args):
     input_gradient_file = args.npz_file
     destination = os.path.join(args.output_folder, 'InputGradients.npz')
     if os.path.abspath(input_gradient_file) != os.path.abspath(destination):
-        shutil.move(input_gradient_file, destination)
+        shutil.copyfile(input_gradient_file, destination)
 
 
 if __name__ == "__main__":

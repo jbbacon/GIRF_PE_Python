@@ -1,5 +1,6 @@
 """
 Main script for calcualting the GIRF from the processed data. 
+Terminal Command: pixi run get-girf --data_path /path/to/data --direction x
 Beyond a few minor modifications this is a translation of the MATLAB code provided in https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html
 See help_functions_GIRF for the calculation steps 
 """
@@ -15,10 +16,10 @@ parser = argparse.ArgumentParser(description='Compute and save GIRF from gradien
 parser.add_argument('--data_path', type=str, required=True, help='Path to folder containing .npz input files.')
 parser.add_argument('--direction', type=str, choices=['x', 'y', 'z'], required=True, help='Gradient axis (x, y, or z).')
 parser.add_argument('--save', dest='save', action='store_true', help='Save results to Results Folder (default: True).')
-parser.add_argument('--no-save', dest='save', action='store_false', help='Disable saving results.')
+parser.add_argument('--no_save', dest='save', action='store_false', help='Disable saving results.')
 parser.set_defaults(save=True)
 parser.add_argument('--plot', dest='plot', action='store_true', help='Display plot of GIRF (default: True).')
-parser.add_argument('--no-plot', dest='plot', action='store_false', help='Disable plot display.')
+parser.add_argument('--no_plot', dest='plot', action='store_false', help='Disable plot display.')
 parser.set_defaults(plot=True)
 parser.add_argument('--linear', dest='linear', action='store_true', help='Use linear term (default: True).')
 parser.add_argument('--b0', dest='linear', action='store_false', help='Compute B0 term instead.')
@@ -180,9 +181,7 @@ if Plotting ==True:
 
 # Step 5: Save Results
 
-# Check if the directory exists, if not, create it
-if not os.path.exists(dataSavePath):
-    os.makedirs(dataSavePath)
+
 
 # Set the output file name based on gradient type
 if Linear:
@@ -190,9 +189,15 @@ if Linear:
 else:
     file_name = f'GIRFOptimized_G{gradientAxis.upper()}B0.npz'
 
-file_path = os.path.join(dataSavePath, file_name)
+
 
 if Save:
+
+    # Check if the directory exists, if not, create it
+    if not os.path.exists(dataSavePath):
+        os.makedirs(dataSavePath)
+        
+    file_path = os.path.join(dataSavePath, file_name)
     # Save the required variables: GIRF_FT, params, roTime, freqFull
     np.savez(file_path, GIRF_FT=GIRF_FT, params=params, roTime=roTime, freqFull=freqFull)
 
