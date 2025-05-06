@@ -29,9 +29,9 @@ pixi run gen-seq
 ```
 
 ## Contents
-**Pypulseq_GIRF_PE.py** - This creates the .seq file to be used on the scanner to collect GIRF data. 
+**Pypulseq_GIRF_PE.py** - Pypulseq code to create the .seq file used on the scanner to collect GIRF data. 
 
-Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27583 for the optimised GIRF calcualtion, and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. 
+Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27583 for the optimised GIRF calcualtion, and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. Pypulseq: https://github.com/imr-framework/pypulseq.
 
 Notes: The ADC event has 80000 points, when on the scanner this should be split up into readout events of length of 8000. Lib Balance should be disabled on the scanner. Scanner requires pulseq compiler >= 1.4.3. 
 
