@@ -73,6 +73,6 @@ Other tags to adjust the plotting, B0 or self term of the GIRF, file saving, the
 
 ---
 
-#Example Data 
+## Example Data 
 
 Example processed data from a 3T Siemens Prisma scanner and a Siemens Magnetom 7T Plus can be found here: https://zenodo.org/records/15352984. 
