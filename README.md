@@ -59,7 +59,7 @@ pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_or
 --direction x --output_folder /path/to/output/folder
 ```
 
-This will again need to be run 3 times for the 3 directions.
+This will need to be run 3 times for the 3 directions.
 
 ---
 
@@ -70,3 +70,9 @@ Run the script through terminal as
 pixi run get-girf --data_path /path/to/data --direction x
 ```
 Other tags to adjust the plotting, B0 or self term of the GIRF, file saving, the start point and end point of the data.
+
+---
+
+#Example Data 
+
+Example processed data from a 3T Siemens Prisma scanner and a Siemens Magnetom 7T Plus can be found here: https://zenodo.org/records/15352984. 
