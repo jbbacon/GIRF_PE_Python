@@ -150,7 +150,7 @@ def main(args):
 
     def ref_2dFT(input):
         input_grid = input.reshape(80000, n, n, num_batches)
-        ft_kspace = np.fft.fft2(input_grid, axes=(1, 2))
+        ft_kspace = np.fft.ifft2(input_grid, axes=(1, 2))
         ft_kspace_shifted = np.fft.fftshift(ft_kspace, axes=(1, 2))
         modified_kspace_all = ft_kspace_shifted.reshape(80000, n*n, num_batches)
         return modified_kspace_all
@@ -158,7 +158,7 @@ def main(args):
 
     def tri_2dFT(input):
         input_grid = input.reshape(80000, n, n, len(triangular_amplitudes))
-        ft_kspace = np.fft.fft2(input_grid, axes=(1, 2))
+        ft_kspace = np.fft.ifft2(input_grid, axes=(1, 2))
         ft_kspace_shifted = np.fft.fftshift(ft_kspace, axes=(1, 2))
         modified_kspace_all = ft_kspace_shifted.reshape(80000, n*n, len(triangular_amplitudes))
         return modified_kspace_all
