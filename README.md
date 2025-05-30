@@ -48,7 +48,7 @@ The function will output the .seq file, a .csv containing information about the 
 
 ---
 
-**GIRF_PE_Processing.py** - This process the raw scanner data (currently only Siemens) performing coil combination, 2D Fourier Transform and arranging the data into a sensible format. This may take ~10 minutes to run per direction.
+**GIRF_PE_Processing.py** - This process the raw scanner data (currently only Siemens) performing 2D Fourier Transform, coil combination and arranging the data into a sensible format. This may take ~10 minutes to run per direction.
 
 Run the script through terminal as
 ```
