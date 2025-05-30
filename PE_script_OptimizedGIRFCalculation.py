@@ -181,15 +181,11 @@ if Plotting ==True:
 
 # Step 5: Save Results
 
-
-
 # Set the output file name based on gradient type
 if Linear:
     file_name = f'GIRFOptimized_G{gradientAxis.upper()}Linear.npz'
 else:
     file_name = f'GIRFOptimized_G{gradientAxis.upper()}B0.npz'
-
-
 
 if Save:
 
