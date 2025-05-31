@@ -46,9 +46,48 @@ def load_parameters(json_file):
     else:
         raise KeyError("JSON missing required keys.")
 
-def process_reference_data(gradient_data, num_ref, n, num_coils):
+def make_radial_hann(n):
+    assert n % 2 == 1, "Hann filter size n must be odd"
+    radius = (n - 1) / 2
+    y, x = np.ogrid[-radius:radius+1, -radius:radius+1]
+    r = np.sqrt(x**2 + y**2)
+    r_max = np.sqrt(2) * radius
+    hann_radial = np.where(
+        r <= r_max,
+        0.5 * (1 + np.cos(np.pi * r / r_max)),
+        0
+    )
+    return hann_radial
+
+def make_csi_filter(n, csi_averages=1):
+    csi_size = np.array([n, n, 1])
+    kmin = np.ceil(-csi_size / 2).astype(int)
+    kmax = np.ceil(csi_size / 2 - 1).astype(int)
+
+    x = np.arange(kmin[0], kmax[0] + 1)
+    y = np.arange(kmin[1], kmax[1] + 1)
+    z = np.arange(kmin[2], kmax[2] + 1)
+    xvals, yvals, zvals = np.meshgrid(x, y, z, indexing='ij')
+
+    dist = np.zeros_like(xvals, dtype=np.float64)
+    if kmax[0] != 0:
+        dist += (xvals / kmax[0])**2
+    if kmax[1] != 0:
+        dist += (yvals / kmax[1])**2
+    if kmax[2] != 0:
+        dist += (zvals / kmax[2])**2
+    dist = np.sqrt(dist)
+
+    filt = csi_averages * (0.54 + 0.46 * np.cos(np.pi * dist))
+    filt[dist > 1] = 0
+
+    return filt[:, :, 0]
+
+def process_reference_data(gradient_data, num_ref, n, num_coils, hann_radial=None):
     def process_ref_block(data_ref_block):
         reshaped = data_ref_block.reshape(n, n, 80000, num_coils)
+        if hann_radial is not None:
+            reshaped = reshaped * hann_radial[:, :, None, None]
         ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1))
         ft_flat = ft.reshape(n * n, 80000, num_coils)
 
@@ -70,7 +109,7 @@ def process_reference_data(gradient_data, num_ref, n, num_coils):
 
     return data_ref_pos_cc, weightslist_pos, data_ref_neg_cc, weightslist_neg
 
-def process_triangle_data(gradient_data, num_ref, num_triangle, n, weightslist_pos, weightslist_neg, num_coils):
+def process_triangle_data(gradient_data, num_ref, num_triangle, n, weightslist_pos, weightslist_neg, num_coils, hann_radial=None):
     num_blocks = num_triangle // (4 * n * n)
     data_tri = gradient_data[num_ref:, :, :]
     data_tri_reshape = data_tri.reshape(num_blocks, 4 * n * n, 80000, num_coils)
@@ -87,6 +126,8 @@ def process_triangle_data(gradient_data, num_ref, num_triangle, n, weightslist_p
     for dir_idx, (var_name, weights_list) in directions.items():
         data_dir = data_tri_reshape[:, dir_idx::4, :, :]
         data_dir_reshape = data_dir.reshape(num_blocks, n, n, 80000, num_coils)
+        if hann_radial is not None:
+            data_dir_reshape = data_dir_reshape * hann_radial[None, :, :, None, None]
         data_dir_FT = np.fft.fftshift(np.fft.fft2(data_dir_reshape, axes=(1, 2)), axes=(1, 2))
         data_dir_FT = data_dir_FT.reshape(num_blocks, n * n, 80000, num_coils)
 
@@ -110,11 +151,22 @@ def process_triangle_data(gradient_data, num_ref, num_triangle, n, weightslist_p
     return data_tri_0_cc, data_tri_1_cc, data_tri_2_cc, data_tri_3_cc
 
 def main(args):
+
+    if args.hann_filter and args.csi_filter:
+        raise ValueError("Choose only one of --hann or --csi_filter, not both.")
+
     # Step 1: Get batch info
     batch_size, num_batches, num_ref, num_triangle = analyze_batches_and_types(args.csv_file)
 
     # Step 2: Load parameters
     triangular_amplitudes, n, slice_offset, batch_size_json = load_parameters(args.json_file)
+
+    hann_radial = None
+    if args.hann_filter:
+        hann_radial = make_radial_hann(n)
+    elif args.csi_filter:
+        hann_radial = make_csi_filter(n, csi_averages=1)
+
 
     all_data_ref_pos_cc = []
     all_data_ref_neg_cc = []
@@ -128,11 +180,13 @@ def main(args):
         all_data = load_mri_data(args.mri_file, start_idx=start_idx, num_scans_to_load=batch_size * 10)
         gradient_data = reshape_mri_data(all_data, batch_size, args.coils)
 
-        data_ref_pos_cc, weightslist_pos, data_ref_neg_cc, weightslist_neg = process_reference_data(gradient_data, num_ref, n, args.coils)
+        data_ref_pos_cc, weightslist_pos, data_ref_neg_cc, weightslist_neg = process_reference_data(
+            gradient_data, num_ref, n, args.coils, hann_radial)
         all_data_ref_pos_cc.append(data_ref_pos_cc)
         all_data_ref_neg_cc.append(data_ref_neg_cc)
 
-        tri0, tri1, tri2, tri3 = process_triangle_data(gradient_data, num_ref, num_triangle, n, weightslist_pos, weightslist_neg, args.coils)
+        tri0, tri1, tri2, tri3 = process_triangle_data(
+            gradient_data, num_ref, num_triangle, n, weightslist_pos, weightslist_neg, args.coils, hann_radial)
         all_data_tri_0_cc.append(tri0)
         all_data_tri_1_cc.append(tri1)
         all_data_tri_2_cc.append(tri2)
@@ -212,6 +266,8 @@ if __name__ == "__main__":
     parser.add_argument('--output_folder', type=Path, required=True, help='Folder to save the output .npz files')
     parser.add_argument('--direction', type=str, required=True, choices=['x', 'y', 'z'], help='Direction for slice labeling')
     parser.add_argument('--coils', type=int, default=32, help='Number of receiver coils (default: 32)')
+    parser.add_argument('--hann_filter', action='store_true', help='Apply a radial Hann filter to data before 2D FT')
+    parser.add_argument('--csi_filter', action='store_true', help='Apply CSI filter (cosine-weighted 2D window) before 2D FT')
 
     args = parser.parse_args()
     main(args)
