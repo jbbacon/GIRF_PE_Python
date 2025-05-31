@@ -59,7 +59,7 @@ pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_or
 --direction x --output_folder /path/to/output/folder
 ```
 
-This will need to be run 3 times for the 3 directions.
+This will need to be run 3 times for the 3 directions. Options for 2D filters applied before Fourier Transform.
 
 ---
 
