@@ -11,6 +11,7 @@ Terminal Command: pixi run gen-seq --direction x --output /path/to/output/folder
 
 import argparse
 from pathlib import Path
+import sys
 
 parser = argparse.ArgumentParser(description='GIRF Sequence Generation.')
 parser.add_argument('--direction', choices=['x', 'y', 'z'], default='z', required=True, help='Primary GIRF direction')
@@ -20,6 +21,7 @@ parser.add_argument('--n', type=int, default=5, help='Number of phase encodes (N
 parser.add_argument('--slice_thickness', type=float, default=1, help='Slice thickness in millimeters')
 parser.add_argument('--fov', type=float, default=200e-3, help='Field of view in meters')
 parser.add_argument('--slice_offset', type=float, default=17, help='Magnitude of slice offset in millimeters (positive and negative will be used)')
+parser.add_argument('--dwell_time', type=float, default=5e-6, help='Dwell Time in seconds')
 parser.add_argument('--num_triangles', type=int, choices=[6, 9, 18], default=18, help='Number of triangle gradients (6, 9, or 18)')
 parser.add_argument('--no_save', action='store_false', dest='save', help='Flag to not save output files.')
 parser.add_argument('--plot', action='store_true', help='Plot the sequence timing diagram if specified.')
@@ -44,6 +46,7 @@ slice_thickness = args.slice_thickness/1000
 slice_offset = args.slice_offset/1000
 slice_offsets = [slice_offset, -slice_offset]
 deltak = 1 / fov
+dwell_time =args.dwell_time
 
 # Set directions and FOV ordering
 if args.direction == 'z':
@@ -74,7 +77,8 @@ def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
             'triangular_amplitudes': np.array(triangular_amplitudes).tolist(),
             'n': Nx,  # Store the number of phase encode steps (n)
             'slice_offset': slice_offset,
-            'batch_size': args.batch_size
+            'batch_size': args.batch_size,
+            'dwell' : dwell_time
         }
         
         os.makedirs(output_folder, exist_ok=True)
@@ -107,7 +111,7 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
         gyPE = pp.make_trapezoid(channel=directions[2], area=(k - (Ny - 1)/2) * deltak,
                                  duration=pp.calc_duration(gzReph), system=system)
 
-        adc = pp.make_adc(num_samples=80000, dwell=5e-6, system=system)
+        adc = pp.make_adc(num_samples=80000, dwell=dwell_time, system=system)
         gz_spoil = pp.make_trapezoid(channel=gz.channel, area=-gz.area / 2, system=system)
 
         seq.add_block(rf, gz)
@@ -152,7 +156,7 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
         gyPE = pp.make_trapezoid(channel=directions[2], area=(k - (Ny - 1)/2) * deltak,
                                  duration=pp.calc_duration(gzReph), system=system)
 
-        adc = pp.make_adc(num_samples=80000, dwell=5e-6, system=system)
+        adc = pp.make_adc(num_samples=80000, dwell=dwell_time, system=system)
         grad_spoilz = pp.make_trapezoid(channel=directions[0], area=-gz.area / 2, system=system)
         grad_triangular = pp.make_trapezoid(
             channel=directions[0],
@@ -235,6 +239,10 @@ elif args.num_triangles == 6:
     triangular_amplitudes = full_amplitudes[::3]  # Every third one
 else:
     raise ValueError("num_triangles must be one of 6, 9, or 18")
+
+if max(triangular_amplitudes)*42.576e6*max(slice_offsets)*dwell_time/1000 > 0.5:
+    print('Phase Error: Reduce Maximum Triangular Gradient, Slice Offset or Dwell Time')
+    sys.exit()
 
 # Save the triangular waveforms to a .npz file if --save is True
 save_triangular_waves(triangular_amplitudes, args.output, args.save)

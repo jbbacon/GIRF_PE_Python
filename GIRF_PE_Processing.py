@@ -37,12 +37,13 @@ def reshape_mri_data(all_data, batch_size, num_coils):
 def load_parameters(json_file):
     with open(json_file, 'r') as f:
         data = json.load(f)
-    if all(k in data for k in ['triangular_amplitudes', 'n', 'slice_offset', 'batch_size']):
+    if all(k in data for k in ['triangular_amplitudes', 'n', 'slice_offset', 'batch_size', 'dwell']):
         triangular_amplitudes = np.array(data['triangular_amplitudes'])
         n = data['n']
         slice_offset = data['slice_offset']
         batch_size_json = data['batch_size']
-        return triangular_amplitudes, n, slice_offset, batch_size_json
+        dwell = data['dwell']
+        return triangular_amplitudes, n, slice_offset, batch_size_json, dwell
     else:
         raise KeyError("JSON missing required keys.")
 
@@ -159,7 +160,7 @@ def main(args):
     batch_size, num_batches, num_ref, num_triangle = analyze_batches_and_types(args.csv_file)
 
     # Step 2: Load parameters
-    triangular_amplitudes, n, slice_offset, batch_size_json = load_parameters(args.json_file)
+    triangular_amplitudes, n, slice_offset, batch_size_json, dwell = load_parameters(args.json_file)
 
     hann_radial = None
     if args.hann_filter:
@@ -200,7 +201,7 @@ def main(args):
     all_data_tri_3_cc = np.concatenate(all_data_tri_3_cc, axis=0).transpose(2, 1, 0)
 
     os.makedirs(args.output_folder, exist_ok=True)
-    dwell_time = 5
+    dwell_time = dwell*1e6
     roPts = 80000
     roTime = np.arange(0, dwell_time * roPts, dwell_time)
 

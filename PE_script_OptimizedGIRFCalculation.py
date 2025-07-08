@@ -92,7 +92,6 @@ fn_gradient = os.path.join(full_data_path, fn_gradient)
 params = {
     'gammabar': 42.576e3,  # in Hz/mT
     'gradRasterTime': 10,  # in microseconds
-    'adcDwellTime': 5      # in microseconds
 }
 
 # Load necessary files
@@ -109,6 +108,9 @@ with np.load(fn_slice1_pos) as slice_data:
 
 with np.load(fn_slice1_pos) as batch_data:
     batch_size = batch_data['batch_size']
+    
+with np.load(fn_slice1_pos) as dwell_data:
+    dwell_time = batch_data['dwellTime']
 
 # Step 2: Processing gradient inputs
 params['roPts'] = f-n
@@ -116,6 +118,7 @@ params['nRep'] = raw_sig_s1_pos.shape[1]   # Number of PE, this refers to number
 params['nGradAmp'] = raw_sig_s1_pos.shape[2]  # Number of gradient blips (18)
 params['slicePos'] = slice_offset     # distance of slices from isocenter in meters
 params['batch_size'] = batch_size
+params['adcDwellTime'] = dwell_time
 
 # Resample gradients using the helper function `resamp_gradients`
 gResamp, roTime = resamp_gradients(grad_in_all, params)
