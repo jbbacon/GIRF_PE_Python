@@ -1,6 +1,6 @@
 import numpy as np
 
-def read_multi_files(var_name, *file_paths, N, F):
+def read_multi_files_np(var_name, *file_paths, N, F):
     """
     Function for loading variables with the same name from multiple .npz files.
 

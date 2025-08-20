@@ -1,5 +1,4 @@
-from .read_multi_files import read_multi_files
+from .read_multi_files_np import read_multi_files_np
 from .resamp_gradients import resamp_gradients
-from .calculate_output_gradient_optimized import calculate_output_gradient_optimized
+from .spherical import calculate_output_gradient_optimized_spherical
 from .display_girf_magnitude import display_girf_magnitude
-from .shift_index import shift_half_index_spline

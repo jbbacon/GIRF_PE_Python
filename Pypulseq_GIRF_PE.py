@@ -2,27 +2,26 @@
 Pypulseq code to generate the pulse sequence for GIRF calcualtion
 
 Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html for the optimised GIRF calculation 
-and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 5*5 phase encoding
+and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the phase encoding
 
-Scan time is approximately 2 hours per direction for full usage
+Scan time is approximately 1.5 hours per direction for full usage
 
 Terminal Command: pixi run gen-seq --direction x --output /path/to/output/folder
 """
 
 import argparse
 from pathlib import Path
+import matplotlib.pyplot as plt
 import sys
 
 parser = argparse.ArgumentParser(description='GIRF Sequence Generation.')
 parser.add_argument('--direction', choices=['x', 'y', 'z'], default='z', required=True, help='Primary GIRF direction')
 parser.add_argument('--output', type=Path, required=True, help='Output folder to save .seq file and additional parameter requirements')
-parser.add_argument('--batch_size', type=int, default=3, help='Number of triangle pulses used between references')
-parser.add_argument('--n', type=int, default=5, help='Number of phase encodes (Nx = Ny = n)')
+parser.add_argument('--n', type=int, default=7, help='Number of phase encodes (Nx = Ny = n)')
 parser.add_argument('--slice_thickness', type=float, default=1, help='Slice thickness in millimeters')
-parser.add_argument('--fov', type=float, default=200e-3, help='Field of view in meters')
-parser.add_argument('--slice_offset', type=float, default=17, help='Magnitude of slice offset in millimeters (positive and negative will be used)')
+parser.add_argument('--fov', type=float, default=231e-3, help='Field of view in meters')
+parser.add_argument('--slice_offsets',type=float,nargs='+',default=[34, 17, -17, -34], help='Magnitudes of slice offsets in millimeters')
 parser.add_argument('--dwell_time', type=float, default=5e-6, help='Dwell Time in seconds')
-parser.add_argument('--num_triangles', type=int, choices=[6, 9, 18], default=18, help='Number of triangle gradients (6, 9, or 18)')
 parser.add_argument('--no_save', action='store_false', dest='save', help='Flag to not save output files.')
 parser.add_argument('--plot', action='store_true', help='Plot the sequence timing diagram if specified.')
 parser.add_argument('--plot_range', type=float, nargs=2, metavar=('START', 'END'), default=(0, 200),help='Time range for plotting in seconds, used only if --plot is specified.')
@@ -43,22 +42,33 @@ args.output.mkdir(exist_ok=True, parents=True)
 Nx = Ny = args.n
 fov = args.fov
 slice_thickness = args.slice_thickness/1000
-slice_offset = args.slice_offset/1000
-slice_offsets = [slice_offset, -slice_offset]
+slice_offsets = [offset / 1000 for offset in args.slice_offsets]
+if len(slice_offsets) != 4:
+    print('Must select exactly 4 slice offsets')
+    sys.exit()
+
 deltak = 1 / fov
-dwell_time =args.dwell_time
+dwell_time = args.dwell_time
+
+center = (Nx - 1) / 2
+max_radius = center 
+
+valid_phase_encodes = [
+    (j, k) for j in range(Nx) for k in range(Ny)
+    if np.sqrt((j - center) ** 2 + (k - center) ** 2) <= max_radius
+]
 
 # Set directions and FOV ordering
 if args.direction == 'z':
     directions = ['z', 'x', 'y']
-    fov_vector = [fov, fov, 2*slice_offset]
+    fov_vector = [fov, fov, 2*max(abs(s) for s in slice_offsets)]
 elif args.direction == 'y':
     directions = ['y', 'z', 'x']
-    fov_vector = [fov, 2*slice_offset, fov]
+    fov_vector = [fov, 2*max(abs(s) for s in slice_offsets), fov]
 else:
     directions = ['x', 'y', 'z']
-    fov_vector = [2*slice_offset, fov, fov]
-
+    fov_vector = [2*max(abs(s) for s in slice_offsets), fov, fov]
+    
 # Log for pulse ordering files
 def write_log(pulse_log, log_file):
     fieldnames = ['batch_index', 'type', 'j', 'k', 'slice_offset', 'amplitude_sign', 'triangular_amplitude_mT/m']
@@ -76,23 +86,24 @@ def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
         data = {
             'triangular_amplitudes': np.array(triangular_amplitudes).tolist(),
             'n': Nx,  # Store the number of phase encode steps (n)
-            'slice_offset': slice_offset,
-            'batch_size': args.batch_size,
-            'dwell' : dwell_time
+            'slice_offsets': slice_offsets,
+            'dwell' : dwell_time,
+            'fov': fov
         }
         
         os.makedirs(output_folder, exist_ok=True)
 
-        with open(output_folder / 'parameters.json', 'w') as fp:
+        with open(output_folder / f'parameters_{args.direction}.json', 'w') as fp:
             json.dump(data, fp)
 
         print(f"Parameters saved to {output_folder / 'parameters.json'}")
     else:
         print("Save flag is set to False. Skipping saving tof parameters.")
 
-def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag):
+def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag, valid_phase_encodes, sequence_index):
     pulse_log = []
-    for j, k, slice_offset in itertools.product(range(Nx), range(Ny), slice_offsets):
+    sequence_index[0] += 1
+    for (j, k), slice_offset in itertools.product(valid_phase_encodes, slice_offsets):
         rf, gz, gzReph = pp.make_sinc_pulse(
             flip_angle=np.deg2rad(90),
             duration=4e-3,
@@ -111,14 +122,19 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
         gyPE = pp.make_trapezoid(channel=directions[2], area=(k - (Ny - 1)/2) * deltak,
                                  duration=pp.calc_duration(gzReph), system=system)
 
-        adc = pp.make_adc(num_samples=80000, dwell=dwell_time, system=system)
+        adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system)
         gz_spoil = pp.make_trapezoid(channel=gz.channel, area=-gz.area / 2, system=system)
+
+        #slice_index = slice_offsets.index(slice_offset)
+        #label = pp.make_label(type= 'SET', label='SLC', value=slice_index)
+        #label2 = pp.make_label(type='SET', label='PHS', value=sequence_index[0])
+
 
         seq.add_block(rf, gz)
         seq.add_block(gzReph, gxPE, gyPE)
-        seq.add_block(adc)
+        seq.add_block(adc)#, label, label2)
         seq.add_block(gz_spoil)
-        seq.add_block(pp.make_delay(3))
+        seq.add_block(pp.make_delay(0.9))
 
         pulse_log.append({
             'batch_index': batch_index,
@@ -133,11 +149,14 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
     if save_flag:
         write_log(pulse_log, log_file)
 
-def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directions, log_file, batch_index, save_flag):
+
+def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directions, log_file, batch_index, save_flag, valid_phase_encodes, sequence_index):
+    sequence_index[0] += 1
     triangular_amplitude_hz_per_m = triangular_amplitude_mT_per_m * system.gamma / 1000
     rise_time = triangular_amplitude_hz_per_m / system.max_slew
     pulse_log = []
-    for j, k, amplitude_sign, offset in itertools.product(range(Nx), range(Ny), [1, -1], slice_offsets):
+
+    for (j, k), amplitude_sign, offset in itertools.product(valid_phase_encodes, [1, -1], slice_offsets):
         rf, gz, gzReph = pp.make_sinc_pulse(
             flip_angle=np.deg2rad(90),
             duration=4e-3,
@@ -156,7 +175,7 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
         gyPE = pp.make_trapezoid(channel=directions[2], area=(k - (Ny - 1)/2) * deltak,
                                  duration=pp.calc_duration(gzReph), system=system)
 
-        adc = pp.make_adc(num_samples=80000, dwell=dwell_time, system=system)
+        adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system)
         grad_spoilz = pp.make_trapezoid(channel=directions[0], area=-gz.area / 2, system=system)
         grad_triangular = pp.make_trapezoid(
             channel=directions[0],
@@ -167,11 +186,16 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
             delay=2e-3,
             system=system
         )
+        #slice_index = slice_offsets.index(offset)
+        #label = pp.make_label(type= 'SET', label='SLC', value=slice_index)
+        #label2 = pp.make_label(type='SET', label='PHS', value=sequence_index[0])
+
         seq.add_block(rf, gz)
         seq.add_block(gzReph, gxPE, gyPE)
-        seq.add_block(adc, grad_triangular)
+ 
+        seq.add_block(adc, grad_triangular)#, label, label2)
         seq.add_block(grad_spoilz)
-        seq.add_block(pp.make_delay(3))
+        seq.add_block(pp.make_delay(0.9))
 
         pulse_log.append({
             'batch_index': batch_index,
@@ -185,6 +209,7 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
 
     if save_flag:
         write_log(pulse_log, log_file)
+
 
 def create_triangular_wave(amplitude, step_size=1.8, length=4000):
 
@@ -220,25 +245,11 @@ def save_triangular_waves(triangular_amplitudes, output_folder, save_flag):
     else:
         print("Save flag is set to False. Skipping saving the .npz file.")
 
-# Validate batch size compatibility
-if args.num_triangles % args.batch_size != 0:
-    raise ValueError("Number of triangle gradients must be divisible by batch size.")
-
 # Set amplitudes
-full_amplitudes = [
+triangular_amplitudes = [
     9, 10.8, 12.6, 14.4, 16.2, 18, 19.8, 21.6, 23.4,
     25.2, 27, 28.8, 30.6, 32.4, 34.2, 36, 37.8, 39.6
 ]
-
-# Select subset of amplitudes based on user input
-if args.num_triangles == 18:
-    triangular_amplitudes = full_amplitudes
-elif args.num_triangles == 9:
-    triangular_amplitudes = full_amplitudes[::2]  # Every other one
-elif args.num_triangles == 6:
-    triangular_amplitudes = full_amplitudes[::3]  # Every third one
-else:
-    raise ValueError("num_triangles must be one of 6, 9, or 18")
 
 if max(triangular_amplitudes)*42.576e6*max(slice_offsets)*dwell_time/1000 > 0.5:
     print('Phase Error: Reduce Maximum Triangular Gradient, Slice Offset or Dwell Time')
@@ -252,7 +263,6 @@ seq = pp.Sequence()
 system = pp.Opts(max_grad=40, grad_unit='mT/m', max_slew=180, slew_unit='T/m/s',
                  rf_ringdown_time=20e-6, rf_dead_time=100e-6,
                  grad_raster_time=10e-6, adc_dead_time=1e-5)
-
 # File naming and paths
 direction_letter = args.direction
 os.makedirs(args.output, exist_ok=True)
@@ -261,14 +271,15 @@ if os.path.exists(log_file):
     os.remove(log_file)
 
 # Build sequence
+sequence_index = [0] 
 batch_index = 0
 for i, amplitude in enumerate(triangular_amplitudes):
-    if i % args.batch_size == 0:
-        ref(seq, system, slice_offsets, directions, log_file, batch_index, args.save)
-    triangle(seq, system, amplitude, slice_offsets, directions, log_file, batch_index, args.save)
-    if i % args.batch_size == args.batch_size - 1:
+    if i % 3 == 0:
+        ref(seq, system, slice_offsets, directions, log_file, batch_index, args.save, valid_phase_encodes, sequence_index)
+    triangle(seq, system, amplitude, slice_offsets, directions, log_file, batch_index, args.save, valid_phase_encodes, sequence_index)
+    
+    if i % 3 == 3 - 1:
         batch_index += 1
-
 seq.set_definition(key='FOV', value=fov_vector)
 
 if args.plot:
