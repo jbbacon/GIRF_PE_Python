@@ -165,7 +165,6 @@ def main():
 
         if ft_filter is not None:
             reshaped *= ft_filter[:, :, None, None]
-            print('Using FT Filter')
 
         ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1))
         ft_flat = ft.reshape(n2 * n2, 50000, num_coils)
@@ -218,7 +217,6 @@ def main():
 
         if ft_filter is not None:
             reshaped *= ft_filter[:, :, None, None]
-            print('Using FT Filter')
 
         ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1))
         ft_flat = ft.reshape(n2 * n2, 50000, num_coils)

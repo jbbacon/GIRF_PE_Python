@@ -11,7 +11,6 @@ Terminal Command: pixi run gen-seq --direction x --output /path/to/output/folder
 
 import argparse
 from pathlib import Path
-import matplotlib.pyplot as plt
 import sys
 
 parser = argparse.ArgumentParser(description='GIRF Sequence Generation.')

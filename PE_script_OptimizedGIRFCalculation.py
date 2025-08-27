@@ -302,7 +302,7 @@ coeffs, coeffsFT = calculate_output_gradient_optimized_spherical(rawSigS1_POS, r
 
 girfs=[]
 
-
+plt.figure(figsize=(6,4))
 for i in range(len(coeffs[0,0,:])):
     numerator = np.sum(coeffsFT[:,:,i:i+1] * np.conj(gradInputFT[:,:, :]), axis = 1)
     denominator = np.sum(np.abs(gradInputFT[:,:, :])**2, axis=1)
@@ -318,15 +318,18 @@ for i in range(len(coeffs[0,0,:])):
         freqFull = shift_half_index_spline(freqFull, -0.5)
 
 
-    dispFreqRange = np.array([-30, 30])  # in unit of kHz
-
-    display_girf_magnitude(GIRF_FT, freqFull, dispFreqRange)
+    dispFreqRange = np.array([-30, 30])  # in unit of kHZ
+    lbl = ['B0', 'x', 'y', 'z', 'xy', 'zy', '3z**2 - r**2', 'xz', 'x**2 - y**2', 'y(3x**2 - y**2)', 'xyz', 'y(5z**2 - r**2)', '5z**3 - 3zr**2', 'x(5z**2 - r**2)', 'z(x**2 - y**2)','x * (x**2 - 3y**2)']
+    display_girf_magnitude(GIRF_FT, freqFull, dispFreqRange, label=lbl[i])
 
     girfs.append(GIRF_FT)
 
+print(np.shape(girfs))
+
 if Plotting ==True:
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+    plt.tight_layout()
     plt.show()
-# Step 5: Save Results
 
 if not os.path.exists(dataSavePath):
     os.makedirs(dataSavePath)
