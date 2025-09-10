@@ -19,7 +19,7 @@ git clone https://github.com/jbbacon/GIRF_PE_Python.git
 cd GIRF_PE_Python
 ```
 
-4. Run a script using `pixi run python {script}```. For example
+4. Run a script using "pixi run python {script}". For example
 ```
 pixi run python Pypulseq_GIRF_PE.py
 ```
@@ -74,7 +74,6 @@ Other tags to adjust the plotting, order of the spherical harmonics, file saving
 
 ---
 
-## Example Data (Currently out of date (will update soon))
+## Example Data 
 
-Example processed data from a 3T Siemens Prisma scanner and a Siemens Magnetom 7T Plus can be found here: [ https://zenodo.org/records/15352984](https://zenodo.org/records/15557750). 
-The above will only work with the previous version of the code (05/2025). This will be updated shortly.
+Example processed data from a 3T Siemens Prisma scanner can be found here: https://zenodo.org/records/17019062. 
