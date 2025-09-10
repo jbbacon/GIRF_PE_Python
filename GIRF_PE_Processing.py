@@ -22,12 +22,16 @@ def parse_args():
     parser.add_argument('--hann_filter', action='store_true', help='Apply a radial Hann filter to data before 2D FT')
     parser.add_argument('--csi_filter', action='store_true', help='Apply CSI filter (cosine-weighted 2D window) before 2D FT')
     parser.add_argument("--n2", type=int, default= None, help="Final matrix size after zero padding")
+    parser.add_argument("--dtype", type=str, choices=["complex128", "complex64"], default="complex128",help="Data type for processing (default: complex128), reduce for large file sizes")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-
+    if args.dtype == "complex128":
+        dtype = np.complex128
+    elif args.dtype == "complex64":
+        dtype = np.complex64
     mri_file = args.mri_file
     csv_file = args.csv_file
     json_file = args.json_file
@@ -142,7 +146,7 @@ def main():
         def grid_to_index(j, k, n1):
             return j * n1 + k
         
-        gradient_data = np.transpose(reference_data, (1,2,0,3) )
+        gradient_data = np.transpose(reference_data, (1,2,0,3) ).astype(dtype)
         gradient_data = gradient_data.reshape(len(valid_phase_encodes), num_coils, 50000)
         gradient_data = np.transpose(gradient_data, (0,2,1))
 
@@ -166,7 +170,7 @@ def main():
         if ft_filter is not None:
             reshaped *= ft_filter[:, :, None, None]
 
-        ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1))
+        ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1)).astype(dtype)
         ft_flat = ft.reshape(n2 * n2, 50000, num_coils)
 
         combined_list = []
@@ -191,7 +195,7 @@ def main():
         def grid_to_index(j, k, n1):
             return j * n1 + k
         
-        gradient_data = np.transpose(triangular_data, (1,2,0,3) )
+        gradient_data = np.transpose(triangular_data, (1,2,0,3) ).astype(dtype)
         gradient_data = gradient_data.reshape(len(valid_phase_encodes), num_coils, 50000)
         gradient_data = np.transpose(gradient_data, (0,2,1))
 
@@ -218,10 +222,10 @@ def main():
         if ft_filter is not None:
             reshaped *= ft_filter[:, :, None, None]
 
-        ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1))
+        ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1)).astype(dtype)
         ft_flat = ft.reshape(n2 * n2, 50000, num_coils)
 
-        data_tri_cc = np.empty((n2 * n2, 50000), dtype=np.complex128)
+        data_tri_cc = np.empty((n2 * n2, 50000), dtype=dtype)
         for j in range(n2 * n2):
             FID_block = ft_flat[j, :, :]
             weights = weights_list[j]
@@ -246,78 +250,57 @@ def main():
         sign = '+' if slice_mm > 0 else '-'
         abs_mm = abs(slice_mm)
 
-        # Recalculate slices based on current idx
-        refs = {}
-        ref_combined = {}
-        ref_weights = {}
-        tri_plus = {}
-        tri_neg = {}
-        tri_plus_cc = {}
-        tri_neg_cc = {}
+        # Lists instead of dicts
+        ref_combined_list = []
+        tri_plus_cc_list = []
+        tri_neg_cc_list = []
 
         # Loop over 6 batches
         for b in range(6):
-            ref_key = f"ref{b+1}"
             batch_offset = b * batch_size
 
-            # Extract reference
-            refs[ref_key] = img_obj[:, idx + batch_offset : num_ref + batch_offset : 4, :, :]
-
-            # Process reference
-            ref_combined[ref_key], ref_weights[ref_key] = process_reference_data(refs[ref_key], n1, n2, coils, ft_filter=filter)
+            # Extract and process reference
+            ref_slice = img_obj[:, idx + batch_offset : num_ref + batch_offset : 4, :, :]
+            ref_combined_b, weight = process_reference_data(ref_slice, n1, n2, coils, ft_filter=filter)
+            ref_combined_list.append(ref_combined_b)
 
             # Divide triangles into thirds
             for i in range(3):
                 tri_start = int(i * num_tri / 3)
                 tri_end   = int((i + 1) * num_tri / 3)
 
-                tri_plus_key = f"tri{b+1}_{i+1}_plus"
-                tri_neg_key = f"tri{b+1}_{i+1}_neg"
-
-                # Extract triangle slices
                 plus_start = idx + num_ref + tri_start + batch_offset
                 plus_end   = num_ref + tri_end + batch_offset
                 neg_start  = plus_start + 4  # offset by 4 for neg
                 neg_end    = plus_end
 
-                tri_plus[tri_plus_key] = img_obj[:, plus_start:plus_end:8, :, :]
-                tri_neg[tri_neg_key]   = img_obj[:, neg_start:neg_end:8, :, :]
+                tri_plus_slice = img_obj[:, plus_start:plus_end:8, :, :]
+                tri_neg_slice  = img_obj[:, neg_start:neg_end:8, :, :]
 
-                # Process triangle data
-                weight = ref_weights[ref_key]
-                tri_plus_cc[tri_plus_key] = process_triangle_data(tri_plus[tri_plus_key], n1, n2, weight, coils,ft_filter=filter)
-                tri_neg_cc[tri_neg_key]   = process_triangle_data(tri_neg[tri_neg_key], n1, n2, weight, coils, ft_filter=filter)
+                tri_plus_cc_list.append(process_triangle_data(tri_plus_slice, n1, n2, weight, coils, ft_filter=filter))
+                tri_neg_cc_list.append(process_triangle_data(tri_neg_slice, n1, n2, weight, coils, ft_filter=filter))
 
         # Stack results
-        positive = np.stack(
-            [tri_plus_cc[f"tri{b+1}_{i+1}_plus"] for b in range(6) for i in range(3)],
-            axis=0
-        ).transpose(2, 1, 0)
+        positive = np.stack(tri_plus_cc_list, axis=0).transpose(2, 1, 0)
+        negative = np.stack(tri_neg_cc_list, axis=0).transpose(2, 1, 0)
+        ref = np.stack(ref_combined_list, axis=0).transpose(2, 1, 0)
 
-        negative = np.stack(
-            [tri_neg_cc[f"tri{b+1}_{i+1}_neg"] for b in range(6) for i in range(3)],
-            axis=0
-        ).transpose(2, 1, 0)
-
-        ref = np.stack(
-            [ref_combined[f"ref{b+1}"] for b in range(6)],
-            axis=0
-        ).transpose(2, 1, 0)
-
+        # Filenames
         ref_filename = f"Ref{sign}{direction}_{int(abs_mm*1000)}_slice.npz"
         pos_filename = f"Positive{sign}{int(abs_mm*1000)}{direction}slice.npz"
         neg_filename = f"Negative{sign}{int(abs_mm*1000)}{direction}slice.npz"
 
+        # Save outputs
         np.savez(
             output_folder / ref_filename,
             acqNum=num_batches,
             avgNum=1,
             dwellTime=dwell_time,
             gradAmp=triangular_amplitudes,
-            kspace_all=ref.astype(np.complex128),
+            kspace_all=ref.astype(dtype=dtype),
             roPts=roPts,
             roTime=roTime,
-            slice_offset=slice_mm,  
+            slice_offset=slice_mm,
             n=n2
         )
 
@@ -327,7 +310,7 @@ def main():
             avgNum=1,
             dwellTime=dwell_time,
             gradAmp=triangular_amplitudes,
-            kspace_all=positive.astype(np.complex128),
+            kspace_all=positive.astype(dtype=dtype),
             roPts=roPts,
             roTime=roTime,
             slice_offset=slice_mm,
@@ -340,7 +323,7 @@ def main():
             avgNum=1,
             dwellTime=dwell_time,
             gradAmp=triangular_amplitudes,
-            kspace_all=negative.astype(np.complex128),
+            kspace_all=negative.astype(dtype=dtype),
             roPts=roPts,
             roTime=roTime,
             slice_offset=slice_mm,

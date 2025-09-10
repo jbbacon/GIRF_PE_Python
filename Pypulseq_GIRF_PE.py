@@ -17,6 +17,7 @@ parser = argparse.ArgumentParser(description='GIRF Sequence Generation.')
 parser.add_argument('--direction', choices=['x', 'y', 'z'], default='z', required=True, help='Primary GIRF direction')
 parser.add_argument('--output', type=Path, required=True, help='Output folder to save .seq file and additional parameter requirements')
 parser.add_argument('--n', type=int, default=7, help='Number of phase encodes (Nx = Ny = n)')
+parser.add_argument('--flip_angle', type=int, default=90, help='Flip Angle in degrees')
 parser.add_argument('--slice_thickness', type=float, default=1, help='Slice thickness in millimeters')
 parser.add_argument('--fov', type=float, default=231e-3, help='Field of view in meters')
 parser.add_argument('--slice_offsets',type=float,nargs='+',default=[34, 17, -17, -34], help='Magnitudes of slice offsets in millimeters')
@@ -40,6 +41,7 @@ args.output.mkdir(exist_ok=True, parents=True)
 
 Nx = Ny = args.n
 fov = args.fov
+flipAngle = args.flip_angle
 slice_thickness = args.slice_thickness/1000
 slice_offsets = [offset / 1000 for offset in args.slice_offsets]
 if len(slice_offsets) != 4:
@@ -104,7 +106,7 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
     sequence_index[0] += 1
     for (j, k), slice_offset in itertools.product(valid_phase_encodes, slice_offsets):
         rf, gz, gzReph = pp.make_sinc_pulse(
-            flip_angle=np.deg2rad(90),
+            flip_angle=np.deg2rad(flipAngle),
             duration=4e-3,
             slice_thickness=slice_thickness,
             apodization=0.5,
@@ -157,7 +159,7 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
 
     for (j, k), amplitude_sign, offset in itertools.product(valid_phase_encodes, [1, -1], slice_offsets):
         rf, gz, gzReph = pp.make_sinc_pulse(
-            flip_angle=np.deg2rad(90),
+            flip_angle=np.deg2rad(flipAngle),
             duration=4e-3,
             slice_thickness=slice_thickness,
             apodization=0.5,
