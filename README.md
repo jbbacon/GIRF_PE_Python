@@ -31,8 +31,7 @@ pixi run gen-seq
 ## Contents
 **Pypulseq_GIRF_PE.py** - Pypulseq code to create the .seq file used on the scanner to collect GIRF data. 
 
-Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27583 for the optimised GIRF calcualtion, and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. Pypulseq: https://github.com/imr-framework/pypulseq.
-Phase Encoding is elliptical.
+Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27583 for the optimised GIRF calcualtion, and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. Pypulseq: https://github.com/imr-framework/pypulseq. Phase Encoding is elliptical.
 
 Notes: The ADC event has 50000 points, when on the scanner this should be split up into readout events of length of 5000. Lib Balance should be disabled on the scanner. Scanner requires pulseq compiler >= 1.4.3.
 
@@ -42,8 +41,7 @@ Run the script through terminal as
 ```
 pixi run gen-seq --direction x --output /path/to/output/folder
 ```
-
-Other tags exists for plotting capability, adjusting slice thickness, slice offsets, fov, number of phase encoding steps. 
+Other tags exists for plotting, slice thickness, slice offsets, fov, number of phase encoding steps. 
 
 To fully characterise the scanner this should be called 3 times with the direction being x, y, z respectively. The default options will create a sequence which is ~90 minutes for each direction.
 
@@ -51,7 +49,7 @@ The function will output the .seq file, a .csv containing information about the 
 
 ---
 
-**GIRF_PE_Processing.py** - This process the raw scanner data (currently only Siemens) performing 2D Fourier Transform, coil combination and arranging the data into a sensible format. Zero padding can be defined before the Fourier Transform to improve the spatial resolution.
+**GIRF_PE_Processing.py** - This processes the raw scanner data (currently only Siemens) performing 2D Fourier Transform, coil combination and arranging the data into a sensible format. Zero padding can be defined before the Fourier Transform to improve the spatial resolution.
 
 Run the script through terminal as
 ```
