@@ -34,7 +34,8 @@ pixi run gen-seq
 Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27583 for the optimised GIRF calcualtion, and https://onlinelibrary.wiley.com/doi/10.1002/mrm.27902 for the 2D Phase Encoding. Pypulseq: https://github.com/imr-framework/pypulseq.
 Phase Encoding is elliptical.
 
-Notes: The ADC event has 50000 points, when on the scanner this should be split up into readout events of length of 5000. Lib Balance should be disabled on the scanner. Scanner requires pulseq compiler >= 1.4.3. 
+Notes: The ADC event has 50000 points, when on the scanner this should be split up into readout events of length of 5000. Lib Balance should be disabled on the scanner. Scanner requires pulseq compiler >= 1.4.3. Choice of phantom is important; we recommend a spherical water based phantom with a small diameter (~10cm), agar has also worked. This must be spectroscopically simple (contain only one chemical shift environment).
+
 
 Run the script through terminal as
 ```
@@ -71,6 +72,8 @@ Run the script through terminal as
 pixi run get-girf --data_path /path/to/data --direction x --json_file /path/to/json/file
 ```
 Other tags to adjust the plotting, order of the spherical harmonics, file saving, the start point and end point of the data, thresholding for voxel selection.
+
+For troubleshooting reduce the number of points (--f tag), or increase/decrease the max/min threshold.
 
 ---
 
