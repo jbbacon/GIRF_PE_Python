@@ -199,9 +199,7 @@ def select_voxels(refmax, x, min_threshold = 0.01, max_threshold=0.01):
             ax.plot(np.abs(refmax[:, idx]), color='blue', linewidth=0.4)
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_ylim(-0.01, 0.1)
-
-
+            ax.set_ylim(-0.01, max_threshold*2)
 
             # Draw red outline if part of the mask
             pi, pj = i + 1, j + 1
@@ -217,7 +215,7 @@ def select_voxels(refmax, x, min_threshold = 0.01, max_threshold=0.01):
                 
             if (i, j) in selected_indices:
                 rect = plt.Rectangle((0, 0), 1, 1, transform=ax.transAxes,
-                                    color='green', linewidth=6, fill=False)
+                                    color='green', linewidth=4, fill=False)
                 ax.add_patch(rect)
 
     def on_click(event):
@@ -306,19 +304,15 @@ plt.figure(figsize=(6,4))
 for i in range(len(coeffs[0,0,:])):
     numerator = np.sum(coeffsFT[:,:,i:i+1] * np.conj(gradInputFT[:,:, :]), axis = 1)
     denominator = np.sum(np.abs(gradInputFT[:,:, :])**2, axis=1)
-    regularizer = 0
 
-    GIRF_FT = numerator/(denominator+regularizer)
 
-    freqRange = int(round(1 / (params['adcDwellTime'] / 1e6) / 1e3)  )# Full spectrum width, in kHz
-    freqFull = np.linspace(-freqRange / 2 , freqRange / 2, params['roPts'])
+    GIRF_FT = numerator/(denominator)
+
+    freqFull = np.fft.fftshift(np.fft.fftfreq(f-n, params['adcDwellTime']/1e6))
     #Adjust the position due to small error using linspace
 
-    if (f - n) % 2 == 0:
-        freqFull = shift_half_index_spline(freqFull, -0.5)
 
-
-    dispFreqRange = np.array([-30, 30])  # in unit of kHZ
+    dispFreqRange = np.array([-30000, 30000])  # in unit of HZ
     lbl = ['B0', 'x', 'y', 'z', 'xy', 'zy', '3z**2 - r**2', 'xz', 'x**2 - y**2', 'y(3x**2 - y**2)', 'xyz', 'y(5z**2 - r**2)', '5z**3 - 3zr**2', 'x(5z**2 - r**2)', 'z(x**2 - y**2)','x * (x**2 - 3y**2)']
     display_girf_magnitude(GIRF_FT, freqFull, dispFreqRange, label=lbl[i])
 

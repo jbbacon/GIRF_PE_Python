@@ -26,7 +26,7 @@ def display_girf_magnitude(GIRF_FT, fullFreqRange, dispFreqRange=None, label=Non
     plt.plot(fullFreqRange, GIRF_FT_mean_abs, linewidth=1, label = label)
     plt.xlim(dispFreqRange)
     plt.ylim([0, 1.1])
-    plt.xlabel('Frequency [kHz]', fontsize=10)
+    plt.xlabel('Frequency [Hz]', fontsize=10)
     plt.ylabel('Magnitude of GIRF [AU]', fontsize=10)
     plt.title('Magnitude of GIRF in Frequency Domain', fontsize=10)
 
