@@ -41,7 +41,7 @@ Run the script through terminal as
 ```
 pixi run gen-seq --direction x --output /path/to/output/folder
 ```
-Other tags exists for plotting, slice thickness, slice offsets, fov, number of phase encoding steps. 
+Other tags exists for plotting, slice thickness, slice offsets, fov, flip angle, number of phase encoding steps. 
 
 To fully characterise the scanner this should be called 3 times with the direction being x, y, z respectively. The default options will create a sequence which is ~90 minutes for each direction.
 
