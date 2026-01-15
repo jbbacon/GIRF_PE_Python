@@ -78,4 +78,4 @@ For troubleshooting reduce the number of points (--f tag), or increase/decrease 
 
 ## Example Data 
 
-Example processed data from a 3T Siemens Prisma scanner can be found here: [![DOI](https://zenodo.org/badge/1135244763.svg)](https://doi.org/10.5281/zenodo.18262880)
+Example processed data from a 3T Siemens Prisma scanner can be found here: [![DOI](https://zenodo.org/badge/956655542.svg)](https://doi.org/10.5281/zenodo.15350583)
