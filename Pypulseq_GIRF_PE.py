@@ -101,9 +101,8 @@ def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
     else:
         print("Save flag is set to False. Skipping saving tof parameters.")
 
-def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag, valid_phase_encodes, sequence_index):
+def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag, valid_phase_encodes):
     pulse_log = []
-    sequence_index[0] += 1
     for (j, k), slice_offset in itertools.product(valid_phase_encodes, slice_offsets):
         rf, gz, gzReph = pp.make_sinc_pulse(
             flip_angle=np.deg2rad(flipAngle),
@@ -126,14 +125,9 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
         adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system)
         gz_spoil = pp.make_trapezoid(channel=gz.channel, area=-gz.area / 2, system=system)
 
-        #slice_index = slice_offsets.index(slice_offset)
-        #label = pp.make_label(type= 'SET', label='SLC', value=slice_index)
-        #label2 = pp.make_label(type='SET', label='PHS', value=sequence_index[0])
-
-
         seq.add_block(rf, gz)
         seq.add_block(gzReph, gxPE, gyPE)
-        seq.add_block(adc)#, label, label2)
+        seq.add_block(adc)
         seq.add_block(gz_spoil)
         seq.add_block(pp.make_delay(0.9))
 
@@ -151,8 +145,7 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
         write_log(pulse_log, log_file)
 
 
-def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directions, log_file, batch_index, save_flag, valid_phase_encodes, sequence_index):
-    sequence_index[0] += 1
+def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directions, log_file, batch_index, save_flag, valid_phase_encodes):
     triangular_amplitude_hz_per_m = triangular_amplitude_mT_per_m * system.gamma / 1000
     rise_time = triangular_amplitude_hz_per_m / system.max_slew
     pulse_log = []
@@ -187,14 +180,11 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
             delay=2e-3,
             system=system
         )
-        #slice_index = slice_offsets.index(offset)
-        #label = pp.make_label(type= 'SET', label='SLC', value=slice_index)
-        #label2 = pp.make_label(type='SET', label='PHS', value=sequence_index[0])
 
+        
         seq.add_block(rf, gz)
         seq.add_block(gzReph, gxPE, gyPE)
- 
-        seq.add_block(adc, grad_triangular)#, label, label2)
+        seq.add_block(adc, grad_triangular)
         seq.add_block(grad_spoilz)
         seq.add_block(pp.make_delay(0.9))
 
@@ -272,12 +262,12 @@ if os.path.exists(log_file):
     os.remove(log_file)
 
 # Build sequence
-sequence_index = [0] 
+
 batch_index = 0
 for i, amplitude in enumerate(triangular_amplitudes):
     if i % 3 == 0:
-        ref(seq, system, slice_offsets, directions, log_file, batch_index, args.save, valid_phase_encodes, sequence_index)
-    triangle(seq, system, amplitude, slice_offsets, directions, log_file, batch_index, args.save, valid_phase_encodes, sequence_index)
+        ref(seq, system, slice_offsets, directions, log_file, batch_index, args.save, valid_phase_encodes)
+    triangle(seq, system, amplitude, slice_offsets, directions, log_file, batch_index, args.save, valid_phase_encodes)
     
     if i % 3 == 3 - 1:
         batch_index += 1

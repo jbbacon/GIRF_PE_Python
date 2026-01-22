@@ -163,7 +163,7 @@ with np.load(fn_slice4_pos) as slice_data:
 
 # Step 2: Processing gradient inputs
 params['roPts'] = f-n
-params['nRep'] = raw_sig_s1_pos.shape[1]   # Number of repetitions, this refers to number of PE (25=5*5)
+params['nRep'] = raw_sig_s1_pos.shape[1]   # Number of repetitions, this refers to number of PE 
 params['nGradAmp'] = raw_sig_s1_pos.shape[2]  # Number of gradient blips (18)
 params['slicePos1'] = slice_offset1
 params['slicePos2'] = slice_offset2 
