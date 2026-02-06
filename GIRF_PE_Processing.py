@@ -47,6 +47,7 @@ def main():
     img_obj = x[-1]['image']
     img_obj.flags['squeeze_singletons'] = True
     img_obj.flags['squeeze_ave_dims'] = False
+ 
 
     def analyze_batches_and_types(csv_filename):
         pulse_sequence_info = pd.read_csv(csv_filename)

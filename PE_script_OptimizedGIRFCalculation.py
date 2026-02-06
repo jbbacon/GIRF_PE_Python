@@ -32,6 +32,7 @@ parser.add_argument('--n', type=int, default=6, help='Number of cutoff points to
 parser.add_argument('--f', type=int, default=29999, help='Number of data points to include (resolution vs noise tradeoff).')
 parser.add_argument('--min_thresh', type=float, default=0.001, help='Minimum threshold for voxel selection. (Increase to exclude more).')
 parser.add_argument('--max_thresh', type=float, default=0.04, help='Maximum threshold for voxel selection. (Increase to exclude more).')
+parser.add_argument('--regularizer', type=float, default=1e-4, help='Tikhonov regulizer strength')
 
 args = parser.parse_args()
 
@@ -45,6 +46,7 @@ order = args.order
 min_threshold = args.min_thresh
 max_threshold = args.max_thresh
 json_file = args.json_file
+regularizer = args.regularizer
 
 def load_parameters(json_file):
     with open(json_file, 'r') as f:
@@ -302,18 +304,20 @@ girfs=[]
 
 plt.figure(figsize=(6,4))
 for i in range(len(coeffs[0,0,:])):
+
+    psd = np.abs(gradInputFT)**2
+    max_power = np.max(psd)
+    epsilon= max_power*regularizer
+
     numerator = np.sum(coeffsFT[:,:,i:i+1] * np.conj(gradInputFT[:,:, :]), axis = 1)
-    denominator = np.sum(np.abs(gradInputFT[:,:, :])**2, axis=1)
-
-
+    denominator = np.sum(np.abs(gradInputFT[:,:, :])**2, axis=1)+epsilon
     GIRF_FT = numerator/(denominator)
 
     freqFull = np.fft.fftshift(np.fft.fftfreq(f-n, params['adcDwellTime']/1e6))
-    #Adjust the position due to small error using linspace
-
 
     dispFreqRange = np.array([-30000, 30000])  # in unit of HZ
     lbl = ['B0', 'x', 'y', 'z', 'xy', 'zy', '3z**2 - r**2', 'xz', 'x**2 - y**2', 'y(3x**2 - y**2)', 'xyz', 'y(5z**2 - r**2)', '5z**3 - 3zr**2', 'x(5z**2 - r**2)', 'z(x**2 - y**2)','x * (x**2 - 3y**2)']
+
     display_girf_magnitude(GIRF_FT, freqFull, dispFreqRange, label=lbl[i])
 
     girfs.append(GIRF_FT)

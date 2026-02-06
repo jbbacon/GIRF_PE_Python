@@ -253,7 +253,7 @@ save_triangular_waves(triangular_amplitudes, args.output, args.save)
 seq = pp.Sequence()
 system = pp.Opts(max_grad=40, grad_unit='mT/m', max_slew=180, slew_unit='T/m/s',
                  rf_ringdown_time=20e-6, rf_dead_time=100e-6,
-                 grad_raster_time=10e-6, adc_dead_time=1e-5)
+                 grad_raster_time=10e-6, adc_dead_time=1e-5, B0=3)
 # File naming and paths
 direction_letter = args.direction
 os.makedirs(args.output, exist_ok=True)
