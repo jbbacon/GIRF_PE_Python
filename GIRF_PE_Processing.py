@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import argparse
 import shutil
+import gc
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process MRI raw data.")
@@ -330,6 +331,10 @@ def main():
             slice_offset=slice_mm,
             n=n2
         )
+
+        del positive, negative, ref
+        del ref_combined_list, tri_plus_cc_list, tri_neg_cc_list
+        gc.collect()
 
 
 if __name__ == "__main__":
