@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["James Bacon <james.bacon@seh.ox.ac.uk>", "William Clarke <william.clarke@ndcn.ox.ac.uk>"]
 channels = ["conda-forge", "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public/"]
 name = "GIRF_PE_Python"
@@ -16,6 +16,7 @@ numpy = ">=2.2.4,<3"
 matplotlib = ">=3.10.1,<4"
 scipy = ">=1.15.2,<2"
 fsl_mrs = ">=2.4.3,<3"
+setuptools = "<81"
 
 [pypi-dependencies]
 pypulseq = { git = "https://github.com/imr-framework/pypulseq.git" }

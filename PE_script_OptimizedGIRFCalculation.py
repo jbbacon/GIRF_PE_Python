@@ -30,9 +30,9 @@ parser.add_argument('--order', type=int, default=1, help='Order of the Spherical
 parser.add_argument('--save_path', type=str, default=None, help='Optional path to save output files. It will default to a results folder inside the input folder.')
 parser.add_argument('--n', type=int, default=6, help='Number of cutoff points to account for ringing effects.')
 parser.add_argument('--f', type=int, default=29999, help='Number of data points to include (resolution vs noise tradeoff).')
-parser.add_argument('--min_thresh', type=float, default=0.001, help='Minimum threshold for voxel selection. (Increase to exclude more).')
-parser.add_argument('--max_thresh', type=float, default=0.04, help='Maximum threshold for voxel selection. (Increase to exclude more).')
-parser.add_argument('--regularizer', type=float, default=1e-4, help='Tikhonov regulizer strength')
+parser.add_argument('--min_thresh', type=float, default=0.0001, help='Minimum threshold for voxel selection. (Increase to exclude more).')
+parser.add_argument('--max_thresh', type=float, default=0.02, help='Maximum threshold for voxel selection. (Increase to exclude more).')
+parser.add_argument('--regularizer', type=float, default=1e-6, help='Tikhonov regulizer strength')
 
 args = parser.parse_args()
 
@@ -49,6 +49,20 @@ json_file = args.json_file
 regularizer = args.regularizer
 
 def load_parameters(json_file):
+    """
+    Load slice offset positions and field of view from a JSON file.
+    
+    Args:
+        json_file (str):
+            json_file form the seq generation step
+
+    Returns:
+        slice_offsets (list): 
+            List of slice offset positions.
+        fov (float):
+            Field of view.
+    """
+    
     with open(json_file, 'r') as f:
         data = json.load(f)
     if all(k in data for k in ['triangular_amplitudes', 'n', 'slice_offsets', 'fov']):
@@ -60,6 +74,7 @@ def load_parameters(json_file):
 
 slice_offsets, fov= load_parameters(json_file)
 
+#Preparation to load the correct files from the data_path
 signs=[]
 abs_mm=[]
 for idx in range(4):
@@ -71,7 +86,7 @@ for idx in range(4):
 
 abs_mm=np.asarray(abs_mm)
 
-
+# Prepare spherical harmonic order
 if order not in (1, 2, 3):
     print('order must be 1, 2, or 3')
     sys.exit()
@@ -140,6 +155,7 @@ raw_sig_s3_pos, raw_sig_s3_neg, raw_sig_s4_pos, raw_sig_s4_neg, ref_s3, ref_s4 =
     'kspace_all', fn_slice3_pos, fn_slice3_neg, fn_slice4_pos, fn_slice4_neg, fn_slice3_ref, fn_slice4_ref, N=n, F=f
 )
 
+# Average the reference signals across the bathces 
 refmax1 = np.mean(ref_s1, axis=2)
 refmax2 = np.mean(ref_s2, axis=2)
 refmax3 = np.mean(ref_s3, axis=2)
@@ -149,6 +165,7 @@ refmax4 = np.mean(ref_s4, axis=2)
 with np.load(fn_gradient) as grad_data:
     grad_in_all = grad_data['gradIn_all']
 
+#Load in GIRF data
 with np.load(fn_slice1_pos) as slice_data:
     slice_offset1 = slice_data['slice_offset']
     dwell_time = slice_data['dwellTime']
@@ -164,7 +181,7 @@ with np.load(fn_slice4_pos) as slice_data:
     slice_offset4 = slice_data['slice_offset']
 
 # Step 2: Processing gradient inputs
-params['roPts'] = f-n
+params['roPts'] = f-n # Number of points, tradeoff between reoslution and noise
 params['nRep'] = raw_sig_s1_pos.shape[1]   # Number of repetitions, this refers to number of PE 
 params['nGradAmp'] = raw_sig_s1_pos.shape[2]  # Number of gradient blips (18)
 params['slicePos1'] = slice_offset1
@@ -174,6 +191,21 @@ params['slicePos4'] = slice_offset4     # distance of slices from isocenter in m
 
 
 def select_voxels(refmax, x, min_threshold = 0.01, max_threshold=0.01):
+    """
+    Voxel Selection based on the maximum and minimum values of the reference signal across repetitions.
+    Red borders indicate voxels that are above the threshold.
+    Green borders indicate voxels that are selected for GIRF calculation.
+    Allows for visual inspection of the FID and exclusion of voxels with low signal or potential artifacts.
+
+    Args:
+        refmax (np.array): Reference data averaged across repetitions, with shape [nRO, nPE].
+        x (int): Index of the slice for which to select voxels.
+        min_threshold (float, optional): Minimum threshold for voxel selection. Defaults to 0.01.
+        max_threshold (float, optional): Maximum threshold for voxel selection. Defaults to 0.01.
+
+    Returns:
+        flat_indices (list): List of selected voxel indices.
+    """
     max1 = []
     min1=[]
     for i in range(n2*n2):
@@ -258,18 +290,12 @@ def select_voxels(refmax, x, min_threshold = 0.01, max_threshold=0.01):
     flat_indices = [i * n2 + j for (i, j) in selected_indices]
     return flat_indices
 
+# Perfrom voxel selection for each slice based on the averaged reference signal across repetitions.
 flat1 = select_voxels(refmax =refmax1, x=0 ,min_threshold=min_threshold, max_threshold=max_threshold)
 flat2 = select_voxels(refmax =refmax2, x=1 ,min_threshold=min_threshold, max_threshold=max_threshold)
 flat3 = select_voxels(refmax =refmax3, x=2 ,min_threshold=min_threshold, max_threshold=max_threshold)
 flat4 = select_voxels(refmax =refmax4, x=3 ,min_threshold=min_threshold, max_threshold=max_threshold)
 
-
-def shift_half_index_spline(array, shift):
-    N = len(array)
-    x = np.arange(N)
-    spline = CubicSpline(x, array, bc_type='natural')
-    x_shifted = x +shift   # Shift by half an index
-    return spline(x_shifted)  # Evaluate shifted function
 
 # Resample gradients using the helper function `resamp_gradients`
 gResamp, roTime = resamp_gradients(grad_in_all, params)
@@ -296,6 +322,10 @@ rawSigS3_NEG = np.transpose(raw_sig_s3_neg, (0, 2, 1))
 rawSigS4_POS = np.transpose(raw_sig_s4_pos, (0, 2, 1))
 rawSigS4_NEG = np.transpose(raw_sig_s4_neg, (0, 2, 1))
 
+
+# Performs the calcualtion of the output gradient coefficients using the helper function `calculate_output_gradient_optimized_spherical`.
+# This function takes in the raw signals, reference signals, and gradient inputs, and computes the coefficients for the spherical harmonic expansion of the GIRF. 
+# The selected voxels (flat1, flat2, flat3, flat4) are used to focus the calculation on relevant data points, and the number of points (n2) and field of view (fov) are also provided as parameters for accurate computation.
 coeffs, coeffsFT = calculate_output_gradient_optimized_spherical(rawSigS1_POS, rawSigS1_NEG, rawSigS2_POS, rawSigS2_NEG, ref_s1, ref_s2, 
                                                                      rawSigS3_POS, rawSigS3_NEG, rawSigS4_POS, rawSigS4_NEG, ref_s3, ref_s4,
                                                                      params, gradientAxis=gradientAxis, order= order, index1= flat1, index2 = flat2, index3=flat3, index4=flat4, n2=n2, fov=fov )
@@ -307,8 +337,9 @@ for i in range(len(coeffs[0,0,:])):
 
     psd = np.abs(gradInputFT)**2
     max_power = np.max(psd)
-    epsilon= max_power*regularizer
+    epsilon= max_power*regularizer #Prepares Tikhinov Regularizer
 
+    #Performs GIRF calcualiton 
     numerator = np.sum(coeffsFT[:,:,i:i+1] * np.conj(gradInputFT[:,:, :]), axis = 1)
     denominator = np.sum(np.abs(gradInputFT[:,:, :])**2, axis=1)+epsilon
     GIRF_FT = numerator/(denominator)
@@ -322,7 +353,6 @@ for i in range(len(coeffs[0,0,:])):
 
     girfs.append(GIRF_FT)
 
-print(np.shape(girfs))
 
 if Plotting ==True:
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)

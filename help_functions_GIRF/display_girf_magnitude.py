@@ -1,28 +1,26 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes, mark_inset
 
 
 def display_girf_magnitude(GIRF_FT, fullFreqRange, dispFreqRange=None, label=None):
+    """
+    Plots the magntidue of the GIRF Spherical harmoncis in the frequency domain 
+
+    Args:
+        GIRF_FT (np.array): Girf in the frequency domain, shape (nFreq, nSH)
+        fullFreqRange (np.array): Full frequency range
+        dispFreqRange (np.array, optional): Display frequency range. Defaults to None.
+        label (str, optional): Label for the plot. Defaults to None.
+    """
     # Check arguments and set display frequency range
     if dispFreqRange is None:
         dispFreqRange = [min(fullFreqRange), max(fullFreqRange)]
     
 
     GIRF_FT_mean = np.mean(GIRF_FT, axis=1)
-    GIRF_FT_std = np.std(GIRF_FT, axis=1)
     GIRF_FT_mean_abs = np.abs(GIRF_FT_mean)
-    #GIRF_FT_mean_phase = np.angle(GIRF_FT_mean)
-    GIRF_FT_std_abs = np.abs(GIRF_FT_std)
-    
 
     # Plot magnitude (mean and standard deviation)
-
-    errorBarColor = [255 / 255, 99 / 255, 71 / 255]  
-    plt.fill_between(fullFreqRange, 
-                    GIRF_FT_mean_abs - GIRF_FT_std_abs, 
-                    GIRF_FT_mean_abs + GIRF_FT_std_abs, 
-                    color=errorBarColor, alpha=0.8)
     plt.plot(fullFreqRange, GIRF_FT_mean_abs, linewidth=1, label = label)
     plt.xlim(dispFreqRange)
     plt.ylim([0, 1.1])

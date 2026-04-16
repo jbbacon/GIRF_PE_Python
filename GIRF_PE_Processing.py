@@ -1,4 +1,7 @@
 #Run as pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_order_log_x.csv --json_file /path/to/parameters.json --npz_file /path/to/InputGradients.npz --direction x --output_folder /path/to/output/folder
+# Code for processing Raw twix data
+# Includes FT mapping, coil combination, and output formatting for Ref, Positive, and Negative datasets
+
 
 import twixtools
 import numpy as np
@@ -43,7 +46,7 @@ def main():
     if args.hann_filter and args.csi_filter:
         raise ValueError("Choose only one of --hann_filter or --csi_filter, not both.")
 
-    # now carry on with your existing pipeline
+    # Load MRI data using twixtools
     x = twixtools.map_twix(mri_file)
     img_obj = x[-1]['image']
     img_obj.flags['squeeze_singletons'] = True
@@ -51,6 +54,18 @@ def main():
  
 
     def analyze_batches_and_types(csv_filename):
+        """
+        Grabs batch informaiton from CSV to help processing 
+
+        Args:
+            csv_filename (str): Path to the pulse order log CSV file
+
+        Returns:
+            batch_size (int): Number of pulses in each batch
+            num_batches (int): Total number of batches
+            num_ref (int): Number of reference pulses in each batch
+            num_tri (int): Number of triangle pulses in each batch
+        """
         pulse_sequence_info = pd.read_csv(csv_filename)
 
         batch_indices = pulse_sequence_info['batch_index']
@@ -65,6 +80,17 @@ def main():
     batch_size, num_batches, num_ref, num_tri= analyze_batches_and_types(csv_file)
 
     def load_parameters(json_file):
+        """
+        Grabs parameters needed for processing from JSON file
+
+        Args:
+            json_file (str): Path to the parameters JSON file
+
+        Returns:
+            triangular_amplitudes (np.ndarray): Array of triangular amplitudes
+            n (int): Number of phase encoding steps
+            slice_offsets (list): List of slice offset positions
+        """
         with open(json_file, 'r') as f:
             data = json.load(f)
         if all(k in data for k in ['triangular_amplitudes', 'n', 'slice_offsets', 'fov']):
@@ -78,7 +104,7 @@ def main():
 
     triangular_amplitudes, n1, slice_offsets= load_parameters(json_file)
 
-    # If n2 not supplied, default to n1
+    # Phase encoding index if zero padding included
     n2 = args.n2 if args.n2 is not None else n1
 
     if n2 < n1 or (n2 - n1) % 2 != 0:
@@ -89,6 +115,16 @@ def main():
         print(f'Zero padding from n={n1} to n={n2}')
 
     def make_radial_hann(n):
+        """
+        Creats 2d radial Hann filter for FT filtering 
+        
+        Args:
+            n (int): Size of the Hann filter
+
+        Returns:
+            hann_radial (np.ndarray): The radial Hann filter
+        """
+        
         assert n % 2 == 1, "Hann filter size n must be odd"
         radius = (n - 1) / 2
         y, x = np.ogrid[-radius:radius+1, -radius:radius+1]
@@ -102,6 +138,16 @@ def main():
         return hann_radial
 
     def make_csi_filter(n, csi_averages=1):
+        """
+        Creates a cosine-weighted 2D window (CSI filter) for FT filtering, with optional scaling by csi_averages
+        
+        Args:
+            n (int): Size of the CSI filter
+            csi_averages (int, optional): Scaling factor for the CSI filter. Defaults to 1.
+
+        Returns:
+            np.ndarray: The CSI filter
+        """
         csi_size = np.array([n, n, 1])
         kmin = np.ceil(-csi_size / 2).astype(int)
         kmax = np.ceil(csi_size / 2 - 1).astype(int)
@@ -136,206 +182,295 @@ def main():
         print('No Filter Selected')
 
 
-    def process_reference_data(reference_data, n1, n2, num_coils, ft_filter=None):
+    def _valid_phase_encodes(n1):
+        """
+        Generates list of phase encoding indices used in elliptical phase encoding 
+        Args:
+            n1 (int): Size of the phase encoding grid
+
+        Returns:
+            List[Tuple[int, int]]: List of valid phase encoding indices
+        """
         center = (n1 - 1) / 2
-        max_radius = center  # Can be customized if needed
-
-        # Compute valid phase encode coordinates
-        valid_phase_encodes = [
+        return [
             (j, k) for j in range(n1) for k in range(n1)
-            if np.sqrt((j - center) ** 2 + (k - center) ** 2) <= max_radius
+            if np.sqrt((j - center) ** 2 + (k - center) ** 2) <= center
         ]
-        def grid_to_index(j, k, n1):
-            return j * n1 + k
+
+    def process_reference_data(reference_data, n1, n2, num_coils, ft_filter=None):
+        """
+        Process the reference data (FT with optional filteer, SVD coil combination)
         
-        gradient_data = np.transpose(reference_data, (1,2,0,3) ).astype(dtype)
+        Args:
+            reference_data (np.array): Refence data for one slice, shape (n1, num_timepoints, num_coils)
+            n1 (int): Size of the phase encoding grid
+            n2 (int): Size of the FT grid
+            num_coils (int): Number of coils
+            ft_filter (np.array, optional): FT filter. Defaults to None.
+
+        Returns:
+            combined (np.array): The combined reference data, shape (n2**2, 50000)
+            weights_list (List[np.array]): List of coil combination weights for each voxel
+        """
+        valid_phase_encodes = _valid_phase_encodes(n1)
+
+        gradient_data = np.transpose(reference_data, (1, 2, 0, 3)).astype(dtype)
         gradient_data = gradient_data.reshape(len(valid_phase_encodes), num_coils, 50000)
-        gradient_data = np.transpose(gradient_data, (0,2,1))
+        gradient_data = np.transpose(gradient_data, (0, 2, 1))  
 
-        padded = np.zeros((n1 * n1, 50000, num_coils), dtype=gradient_data.dtype)
+        n_vox = n2 * n2
+        ft_flat = np.empty((n_vox, 50000, num_coils), dtype=dtype)
+        pad = (n2 - n1) // 2
 
-        for i, (j, k) in enumerate(valid_phase_encodes):
-            idx = grid_to_index(j, k, n1)
-            padded[idx] = gradient_data[i]
-        reshaped = padded.reshape(n1, n1, 50000, num_coils)
+        # TIME-CHUNKED FFT mapping 
+        chunk_size = 10000
+        for t_start in range(0, 50000, chunk_size):
+            t_end = min(t_start + chunk_size, 50000)
+            t_len = t_end - t_start
+            
+            grid_chunk = np.zeros((n2, n2, t_len, num_coils), dtype=dtype)
+            
+            for i, (j, k) in enumerate(valid_phase_encodes):
+                grid_chunk[j + pad, k + pad] = gradient_data[i, t_start:t_end, :]
 
-        pad = int((n2-n1)/2)
-        pad_width = (
-            (pad, pad),      # Axis 0: pad 3 before and 3 after → 7 → 13
-            (pad, pad),      # Axis 1: pad 3 before and 3 after → 7 → 13
-            (0, 0),      # Axis 2: no padding (50000)
-            (0, 0)       # Axis 3: no padding (32 coils)
-            )
+            if ft_filter is not None:
+                grid_chunk *= ft_filter[:, :, None, None]
 
-        reshaped = np.pad(reshaped, pad_width=pad_width, mode='constant', constant_values=0)
+            ft_chunk = np.fft.fftshift(np.fft.fft2(grid_chunk, axes=(0, 1)), axes=(0, 1)).astype(dtype)
+            ft_flat[:, t_start:t_end, :] = ft_chunk.reshape(n_vox, t_len, num_coils)
+            
+            del grid_chunk, ft_chunk 
+            
+        del gradient_data
+        gc.collect()
 
-        if ft_filter is not None:
-            reshaped *= ft_filter[:, :, None, None]
+        combined = np.empty((n_vox, 50000), dtype=dtype)
+        weights_list = [None] * n_vox
 
-        ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1)).astype(dtype)
-        ft_flat = ft.reshape(n2 * n2, 50000, num_coils)
+        for i in range(n_vox):
+            combined_i, weights, _ = svd_reduce(ft_flat[i, :, :], return_alpha=True)
+            combined[i] = combined_i
+            weights_list[i] = weights
 
-        combined_list = []
-        weights_list = []
-        for i in range(n2 * n2):
-            combined, weights, _ = svd_reduce(ft_flat[i, :, :], return_alpha=True)
-            combined_list.append(combined)
-            weights_list.append(weights)
+        return combined, weights_list
 
-        return np.array(combined_list), weights_list
 
     def process_triangle_data(triangular_data, n1, n2, weights_list, num_coils, ft_filter=None):
-        center = (n1 - 1) / 2
-        max_radius = center
-
-        # Step 1: Define valid phase encode positions
-        valid_phase_encodes = [
-            (j, k) for j in range(n1) for k in range(n1)
-            if np.sqrt((j - center) ** 2 + (k - center) ** 2) <= max_radius
-        ]
-
-        def grid_to_index(j, k, n1):
-            return j * n1 + k
+        """
+        Process the triangular data (FT with optional filteer, SVD coil combination)
         
-        gradient_data = np.transpose(triangular_data, (1,2,0,3) ).astype(dtype)
+        Args:
+            triangular_data (np.array): Triangular data for one slice, shape (n1, num_timepoints, num_coils)
+            n1 (int): Size of the phase encoding grid
+            n2 (int): Size of the FT grid
+            weights_list (List[np.array]): List of coil combination weights for each voxel, from the reference data
+            num_coils (int): Number of coils
+            ft_filter (np.array, optional): FT filter. Defaults to None.
+
+        Returns:
+            data_tri_cc (np.array): The combined triangular data, shape (n2**2, 50000)
+        """
+        valid_phase_encodes = _valid_phase_encodes(n1)
+
+        gradient_data = np.transpose(triangular_data, (1, 2, 0, 3)).astype(dtype)
         gradient_data = gradient_data.reshape(len(valid_phase_encodes), num_coils, 50000)
-        gradient_data = np.transpose(gradient_data, (0,2,1))
+        gradient_data = np.transpose(gradient_data, (0, 2, 1))  
 
-        padded = np.zeros((n1 * n1, 50000, num_coils), dtype=gradient_data.dtype)
+        n_vox = n2 * n2
+        ft_flat = np.empty((n_vox, 50000, num_coils), dtype=dtype)
+        pad = (n2 - n1) // 2
 
+        # TIME-CHUNKED FFT mapping 
+        chunk_size = 10000
+        for t_start in range(0, 50000, chunk_size):
+            t_end = min(t_start + chunk_size, 50000)
+            t_len = t_end - t_start
+            
+            grid_chunk = np.zeros((n2, n2, t_len, num_coils), dtype=dtype)
+            
+            for i, (j, k) in enumerate(valid_phase_encodes):
+                grid_chunk[j + pad, k + pad] = gradient_data[i, t_start:t_end, :]
 
+            if ft_filter is not None:
+                grid_chunk *= ft_filter[:, :, None, None]
 
-        for i, (j, k) in enumerate(valid_phase_encodes):
-            idx = grid_to_index(j, k, n1)
-            padded[idx] = gradient_data[i]
-        reshaped = padded.reshape(n1, n1, 50000, num_coils)
+            ft_chunk = np.fft.fftshift(np.fft.fft2(grid_chunk, axes=(0, 1)), axes=(0, 1)).astype(dtype)
+            ft_flat[:, t_start:t_end, :] = ft_chunk.reshape(n_vox, t_len, num_coils)
+            
+            del grid_chunk, ft_chunk 
+            
+        del gradient_data
+        gc.collect()
 
-        pad = int((n2-n1)/2)
-        pad_width = (
-            (pad, pad),      # Axis 0: pad 3 before and 3 after → 7 → 13
-            (pad, pad),      # Axis 1: pad 3 before and 3 after → 7 → 13
-            (0, 0),      # Axis 2: no padding (50000)
-            (0, 0)       # Axis 3: no padding (32 coils)
-            )
-
-        reshaped = np.pad(reshaped, pad_width=pad_width, mode='constant', constant_values=0)
-
-
-        if ft_filter is not None:
-            reshaped *= ft_filter[:, :, None, None]
-
-        ft = np.fft.fftshift(np.fft.fft2(reshaped, axes=(0, 1)), axes=(0, 1)).astype(dtype)
-        ft_flat = ft.reshape(n2 * n2, 50000, num_coils)
-
-        data_tri_cc = np.empty((n2 * n2, 50000), dtype=dtype)
-        for j in range(n2 * n2):
+        data_tri_cc = np.empty((n_vox, 50000), dtype=dtype)
+        for j in range(n_vox):
             FID_block = ft_flat[j, :, :]
             weights = weights_list[j]
-            combined = weightedCombination(FID_block, weights)
-            data_tri_cc[j, :] = combined
+            data_tri_cc[j, :] = weightedCombination(FID_block, weights)
 
         return data_tri_cc
 
+    # Make output folder and copy InputGradients.npz if not already there
     os.makedirs(output_folder, exist_ok=True)
-
+    
     destination = output_folder / "InputGradients.npz"
     if Path(args.npz_file).resolve() != destination.resolve():
         shutil.copyfile(args.npz_file, destination)
 
+    # Fixed Parameters
     dwell_time = 5
     roPts = 50000
     roTime = np.arange(0, dwell_time * roPts, dwell_time)
 
+    # Process the 4 slices one by one to manage memory usage, saving outputs after each slice is processed
     for idx in range(4):
         print(f'Processing Slice {idx+1}/4')
+
+        # Used for labeling outputs
         slice_mm = slice_offsets[idx]
         sign = '+' if slice_mm > 0 else '-'
         abs_mm = abs(slice_mm)
 
-        # Lists instead of dicts
-        ref_combined_list = []
-        tri_plus_cc_list = []
-        tri_neg_cc_list = []
+        n_vox = n2 * n2
 
-        # Loop over 6 batches
+        # --- Reference output ---
+        ref = np.empty((50000, n_vox, 6), dtype=dtype)
+
+        # Process each of the 6 batches separately to manage memory usage, then combine into final ref array for output
         for b in range(6):
             batch_offset = b * batch_size
 
-            # Extract and process reference
             ref_slice = img_obj[:, idx + batch_offset : num_ref + batch_offset : 4, :, :]
-            ref_combined_b, weight = process_reference_data(ref_slice, n1, n2, coils, ft_filter=filter)
-            ref_combined_list.append(ref_combined_b)
+            ref_combined_b, weight = process_reference_data(
+                ref_slice, n1, n2, coils, ft_filter=filter
+            )
 
-            # Divide triangles into thirds
-            for i in range(3):
-                tri_start = int(i * num_tri / 3)
-                tri_end   = int((i + 1) * num_tri / 3)
+            ref[:, :, b] = ref_combined_b.T
 
-                plus_start = idx + num_ref + tri_start + batch_offset
-                plus_end   = num_ref + tri_end + batch_offset
-                neg_start  = plus_start + 4  # offset by 4 for neg
-                neg_end    = plus_end
+            del ref_slice, ref_combined_b
+            gc.collect()
 
-                tri_plus_slice = img_obj[:, plus_start:plus_end:8, :, :]
-                tri_neg_slice  = img_obj[:, neg_start:neg_end:8, :, :]
-
-                tri_plus_cc_list.append(process_triangle_data(tri_plus_slice, n1, n2, weight, coils, ft_filter=filter))
-                tri_neg_cc_list.append(process_triangle_data(tri_neg_slice, n1, n2, weight, coils, ft_filter=filter))
-
-        # Stack results
-        positive = np.stack(tri_plus_cc_list, axis=0).transpose(2, 1, 0)
-        negative = np.stack(tri_neg_cc_list, axis=0).transpose(2, 1, 0)
-        ref = np.stack(ref_combined_list, axis=0).transpose(2, 1, 0)
-
-        # Filenames
         ref_filename = f"Ref{sign}{direction}_{int(abs_mm*1000)}_slice.npz"
-        pos_filename = f"Positive{sign}{int(abs_mm*1000)}{direction}slice.npz"
-        neg_filename = f"Negative{sign}{int(abs_mm*1000)}{direction}slice.npz"
-
-        # Save outputs
         np.savez(
             output_folder / ref_filename,
             acqNum=num_batches,
             avgNum=1,
             dwellTime=dwell_time,
             gradAmp=triangular_amplitudes,
-            kspace_all=ref.astype(dtype=dtype),
+            kspace_all=ref,
             roPts=roPts,
             roTime=roTime,
             slice_offset=slice_mm,
             n=n2
         )
 
+        del ref
+        gc.collect()
+
+        # --- Positive output ---
+        positive = np.empty((50000, n_vox, 18), dtype=dtype)
+
+        tri_counter = 0
+        # Process the positive triangle data in batches to manage memory usage
+        for b in range(6):
+            batch_offset = b * batch_size
+
+            ref_slice = img_obj[:, idx + batch_offset : num_ref + batch_offset : 4, :, :]
+            ref_combined_b, weight = process_reference_data(
+                ref_slice, n1, n2, coils, ft_filter=filter
+            )
+            # Process the 3 triangle pulses for this batch
+            for i in range(3):
+                tri_start = int(i * num_tri / 3)
+                tri_end   = int((i + 1) * num_tri / 3)
+
+                plus_start = idx + num_ref + tri_start + batch_offset
+                plus_end   = num_ref + tri_end + batch_offset
+
+                tri_plus_slice = img_obj[:, plus_start:plus_end:8, :, :]
+                tri_plus = process_triangle_data(
+                    tri_plus_slice, n1, n2, weight, coils, ft_filter=filter
+                )
+
+                positive[:, :, tri_counter] = tri_plus.T
+                tri_counter += 1
+
+                del tri_plus_slice, tri_plus
+                gc.collect()
+
+            del ref_slice, ref_combined_b
+            gc.collect()
+
+        pos_filename = f"Positive{sign}{int(abs_mm*1000)}{direction}slice.npz"
         np.savez(
             output_folder / pos_filename,
             acqNum=num_batches,
             avgNum=1,
             dwellTime=dwell_time,
             gradAmp=triangular_amplitudes,
-            kspace_all=positive.astype(dtype=dtype),
+            kspace_all=positive,
             roPts=roPts,
             roTime=roTime,
             slice_offset=slice_mm,
             n=n2
         )
 
+        del positive
+        gc.collect()
+
+        # --- Negative output ---
+        negative = np.empty((50000, n_vox, 18), dtype=dtype)
+
+        tri_counter = 0
+        # Process the negative triangle data in batches to manage memory usage
+        for b in range(6):
+            batch_offset = b * batch_size
+
+            ref_slice = img_obj[:, idx + batch_offset : num_ref + batch_offset : 4, :, :]
+            ref_combined_b, weight = process_reference_data(
+                ref_slice, n1, n2, coils, ft_filter=filter
+            )
+            
+            # Process the 3 triangle pulses for this batch
+            for i in range(3):
+                tri_start = int(i * num_tri / 3)
+                tri_end   = int((i + 1) * num_tri / 3)
+
+                plus_start = idx + num_ref + tri_start + batch_offset
+                plus_end   = num_ref + tri_end + batch_offset
+                neg_start   = plus_start + 4
+                neg_end     = plus_end
+
+                tri_neg_slice = img_obj[:, neg_start:neg_end:8, :, :]
+                tri_neg = process_triangle_data(
+                    tri_neg_slice, n1, n2, weight, coils, ft_filter=filter
+                )
+
+                negative[:, :, tri_counter] = tri_neg.T
+                tri_counter += 1
+
+                del tri_neg_slice, tri_neg
+                gc.collect()
+
+            del ref_slice, ref_combined_b
+            gc.collect()
+
+        neg_filename = f"Negative{sign}{int(abs_mm*1000)}{direction}slice.npz"
         np.savez(
             output_folder / neg_filename,
             acqNum=num_batches,
             avgNum=1,
             dwellTime=dwell_time,
             gradAmp=triangular_amplitudes,
-            kspace_all=negative.astype(dtype=dtype),
+            kspace_all=negative,
             roPts=roPts,
             roTime=roTime,
             slice_offset=slice_mm,
             n=n2
         )
 
-        del positive, negative, ref
-        del ref_combined_list, tri_plus_cc_list, tri_neg_cc_list
+        del negative
         gc.collect()
-
 
 if __name__ == "__main__":
     main()

@@ -10,7 +10,37 @@ import pandas as pd
 def calculate_output_gradient_optimized_spherical(sigS1_POS, sigS1_NEG, sigS2_POS, sigS2_NEG, refS1, refS2, 
                                                       sigS3_POS, sigS3_NEG, sigS4_POS, sigS4_NEG, refS3, refS4,
                                                       params, gradientAxis, order, index1, index2, index3, index4, n2, fov):
-    # Extract the necessary sizes
+    """
+    Performs the optimized spherical harmonic calculation for the given input signals and parameters.
+    
+    Args:
+        sigS1_POS (np.array): slice 1 positive gradient signal
+        sigS1_NEG (np.array): slice 1 negative gradient signal
+        sigS2_POS (np.array): slice 2 positive gradient signal
+        sigS2_NEG (np.array): slice 2 negative gradient signal
+        refS1 (np.array): reference signal for slice 1
+        refS2 (np.array): reference signal for slice 2
+        sigS3_POS (np.array): slice 3 positive gradient signal
+        sigS3_NEG (np.array): slice 3 negative gradient signal
+        sigS4_POS (np.array): slice 4 positive gradient signal
+        sigS4_NEG (np.array): slice 4 negative gradient signal
+        refS3 (np.array): reference signal for slice 3
+        refS4 (np.array): reference signal for slice 4
+        params (dict): Dictionary of fixed parameters for the calculation
+        gradientAxis (str): Axis along which the gradient is applied
+        order (int): Order of the spherical harmonics
+        index1 (list): Indices for slice 1
+        index2 (list): Indices for slice 2
+        index3 (list): Indices for slice 3
+        index4 (list): Indices for slice 4
+        n2 (int): Number of PE steps
+        fov (float): Field of view in the second dimension
+
+    Returns:
+        coeffs_all (np.array): Array of calculated spherical harmonic coefficients in the time domain
+        coeffs_all_FT (np.array): Array of calculated spherical harmonic coefficients in the frequency domain
+    """
+    # Extract the direction
     if gradientAxis == 'x':
         directions = ['x', 'y', 'z']
     if gradientAxis == 'y':
@@ -20,6 +50,7 @@ def calculate_output_gradient_optimized_spherical(sigS1_POS, sigS1_NEG, sigS2_PO
 
     nGradAmp = sigS1_POS.shape[1]  # Number of gradient blips
 
+    # Convert selected indices to Cartesian coordinates
     def symmetric_array(n):
         if n % 2 == 0:
             raise ValueError("n must be an odd integer")

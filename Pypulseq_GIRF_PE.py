@@ -51,6 +51,7 @@ if len(slice_offsets) != 4:
 deltak = 1 / fov
 dwell_time = args.dwell_time
 
+# Get the elliptical phase encoding scheme from the number of Pe steps 
 center = (Nx - 1) / 2
 max_radius = center 
 
@@ -72,6 +73,12 @@ else:
     
 # Log for pulse ordering files
 def write_log(pulse_log, log_file):
+    """ Helps create a .csv with sequence information for later processing
+
+    Args:
+        pulse_log (list): List of dictionaries containing pulse information
+        log_file (Path): Path to the log file
+    """
     fieldnames = ['batch_index', 'type', 'j', 'k', 'slice_offset', 'amplitude_sign', 'triangular_amplitude_mT/m']
     file_exists = os.path.isfile(log_file)
     with open(log_file, mode='a', newline='') as f:
@@ -82,6 +89,14 @@ def write_log(pulse_log, log_file):
 
 # Saving additional parameters needed for analysis 
 def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
+    """Saves the parameters used for sequence generation to a JSON file for later use in analysis.
+
+    Args:
+        triangular_amplitudes (np.ndarray): Array of triangular amplitudes
+        Nx (int): Number of phase encoding steps
+        output_folder (Path): Path to the output folder
+        save_flag (bool): Flag to indicate whether to save the parameters
+    """
     if save_flag:
         # Create a dictionary to store the triangular amplitudes and phase encode steps
         data = {
@@ -102,7 +117,20 @@ def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
         print("Save flag is set to False. Skipping saving tof parameters.")
 
 def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag, valid_phase_encodes):
+    """Generates the reference sequence blocks without the triangular gradient for GIRF calculation.
+
+    Args:
+        seq (pp.Sequence): The pulse sequence object
+        system (pp.System): The scanner system object
+        slice_offsets (list): List of slice offset positions
+        directions (list): List of direction names
+        log_file (Path): Path to the log file
+        batch_index (int): Index of the current batch
+        save_flag (bool): Flag to indicate whether to save the parameters
+        valid_phase_encodes (list): List of valid phase encoding indices
+    """
     pulse_log = []
+    # Loop through all combinations of valid phase encodes and slice offsets to create the reference sequence blocks
     for (j, k), slice_offset in itertools.product(valid_phase_encodes, slice_offsets):
         rf, gz, gzReph = pp.make_sinc_pulse(
             flip_angle=np.deg2rad(flipAngle),
@@ -125,10 +153,15 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
         adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system)
         gz_spoil = pp.make_trapezoid(channel=gz.channel, area=-gz.area / 2, system=system)
 
+        #SS
         seq.add_block(rf, gz)
+        # Rephase and PE gradients
         seq.add_block(gzReph, gxPE, gyPE)
+        # ADC, no triangles
         seq.add_block(adc)
+        # Spoiler
         seq.add_block(gz_spoil)
+        # Delay for full relaxation
         seq.add_block(pp.make_delay(0.9))
 
         pulse_log.append({
@@ -146,10 +179,24 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
 
 
 def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directions, log_file, batch_index, save_flag, valid_phase_encodes):
+    """Generates the sequence blocks with the triangular gradient for GIRF calculation.
+
+    Args:
+        seq (pp.Sequence): The pulse sequence object
+        system (pp.System): The scanner system object
+        triangular_amplitude_mT_per_m (float): The triangular amplitude in mT/m
+        slice_offsets (list): List of slice offset positions
+        directions (list): List of direction names
+        log_file (Path): Path to the log file
+        batch_index (int): Index of the current batch
+        save_flag (bool): Flag to indicate whether to save the parameters
+        valid_phase_encodes (list): List of valid phase encoding indices
+    """
     triangular_amplitude_hz_per_m = triangular_amplitude_mT_per_m * system.gamma / 1000
     rise_time = triangular_amplitude_hz_per_m / system.max_slew
     pulse_log = []
 
+    # Loop through all combinations of valid phase encodes, amplitude signs, and slice offsets to create the sequence blocks with the triangular gradient
     for (j, k), amplitude_sign, offset in itertools.product(valid_phase_encodes, [1, -1], slice_offsets):
         rf, gz, gzReph = pp.make_sinc_pulse(
             flip_angle=np.deg2rad(flipAngle),
@@ -181,11 +228,15 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
             system=system
         )
 
-        
+        #SS
         seq.add_block(rf, gz)
+        # Rephase, PE gradients 
         seq.add_block(gzReph, gxPE, gyPE)
+        # ADC with triangular gradient
         seq.add_block(adc, grad_triangular)
+        # Spoiler
         seq.add_block(grad_spoilz)
+        # Delay for full relaxation
         seq.add_block(pp.make_delay(0.9))
 
         pulse_log.append({
@@ -203,6 +254,18 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
 
 
 def create_triangular_wave(amplitude, step_size=1.8, length=4000):
+    """Generates a description of the input gradient waveforms
+       Input waveforms needed for GIRF calculation later
+    
+
+    Args:
+        amplitude (float): amplitude of the triangular wave in mT/m
+        step_size (float, optional): Size of each step in the waveform amplitude in mT/m. Defaults to 1.8.
+        length (int, optional): Total length of the waveform. Defaults to 4000.
+
+    Returns:
+        full_wave (numpy.ndarray): The generated triangular waveform
+    """
 
     # Determine the number of rise and fall steps
     num_steps = round(amplitude / step_size)  # Number of steps to reach the maximum amplitude
@@ -225,6 +288,13 @@ def create_triangular_wave(amplitude, step_size=1.8, length=4000):
     return full_wave
 
 def save_triangular_waves(triangular_amplitudes, output_folder, save_flag):
+    """Generates and saves the input triangular waveforms to a .npz file for later use in analysis.
+
+    Args:
+        triangular_amplitudes (list): A list of triangular amplitudes in mT/m
+        output_folder (str): The folder where the .npz file will be saved
+        save_flag (bool): A flag indicating whether to save the waveforms
+    """
     if save_flag:
         # Create a list to store all the triangular waveforms
         all_triangles_matrix = np.asarray(
@@ -242,6 +312,7 @@ triangular_amplitudes = [
     25.2, 27, 28.8, 30.6, 32.4, 34.2, 36, 37.8, 39.6
 ]
 
+# check for phase wrap around
 if max(triangular_amplitudes)*42.576e6*max(slice_offsets)*dwell_time/1000 > 0.5:
     print('Phase Error: Reduce Maximum Triangular Gradient, Slice Offset or Dwell Time')
     sys.exit()
@@ -265,6 +336,7 @@ if os.path.exists(log_file):
 
 batch_index = 0
 for i, amplitude in enumerate(triangular_amplitudes):
+    # Create reference blocks every 3 iterations 
     if i % 3 == 0:
         ref(seq, system, slice_offsets, directions, log_file, batch_index, args.save, valid_phase_encodes)
     triangle(seq, system, amplitude, slice_offsets, directions, log_file, batch_index, args.save, valid_phase_encodes)
