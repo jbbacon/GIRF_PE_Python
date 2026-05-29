@@ -35,7 +35,7 @@ Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html an
 
 Notes: The ADC event has 50000 points, when on the scanner this should be split up into readout events of length of 5000. Lib Balance should be disabled on the scanner. Scanner requires pulseq compiler >= 1.4.3.
 
-Choice of phantom is important; we recommend a spherical water based phantom with a small diameter (~10cm). This must be spectroscopically simple (contain only one chemical shift environment).
+Choice of phantom is important; we recommend a spherical water based phantom with a small diameter (~10cm). This must be spectroscopically simple (contain only one chemical shift environment). Full phantom details can be found at https://onlinelibrary.wiley.com/doi/10.1002/mrm.70383.
 
 Run the script through terminal as
 ```
