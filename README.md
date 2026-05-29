@@ -79,3 +79,12 @@ For troubleshooting reduce the number of points (--f tag), or increase/decrease 
 ## Example Data 
 
 Example processed data from a 3T Siemens Prisma scanner can be found here: [![DOI](https://zenodo.org/badge/956655542.svg)](https://doi.org/10.5281/zenodo.15350583)
+
+---
+
+## Citation 
+
+Please cite the following if you use this repository for your research
+
+J. B.Bacon, P.Jezzard, and W. T.Clarke, “MR Spectroscopy Without Water Suppression Using the Gradient Impulse Response Function,” Magnetic Resonance in Medicine (2026): 1–12, https://doi.org/10.1002/mrm.70383.
+
