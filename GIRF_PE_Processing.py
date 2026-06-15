@@ -93,16 +93,39 @@ def main():
         """
         with open(json_file, 'r') as f:
             data = json.load(f)
-        if all(k in data for k in ['triangular_amplitudes', 'n', 'slice_offsets', 'fov']):
+        if all(k in data for k in ['triangular_amplitudes', 'n', 'slice_offsets', 'fov', 'dwell']):
             triangular_amplitudes = np.array(data['triangular_amplitudes'])
             n = data['n']
             slice_offsets = data['slice_offsets']
-            return triangular_amplitudes, n, slice_offsets
+            dwell_time = data['dwell']*1e6
+            return triangular_amplitudes, n, slice_offsets, dwell_time
         else:
             raise KeyError("JSON missing required keys.")
 
 
-    triangular_amplitudes, n1, slice_offsets= load_parameters(json_file)
+    triangular_amplitudes, n1, slice_offsets, dwell_time= load_parameters(json_file)
+    
+    if len(slice_offsets) != 4:
+        raise ValueError(f"Expected 4 slice offsets, got {len(slice_offsets)}")
+
+    if len(triangular_amplitudes) % 3 != 0:
+        raise ValueError(
+            f"Expected triangular amplitudes to be grouped in threes, got {len(triangular_amplitudes)} amplitudes"
+        )
+
+    if dwell_time <= 0:
+        raise ValueError(f"dwell_time must be positive, got {dwell_time}")
+    
+    if num_batches != len(triangular_amplitudes) // 3:
+        raise ValueError(
+            f"Expected {len(triangular_amplitudes)//3} batches from amplitudes, got {num_batches}"
+        )
+
+    if num_tri % 3 != 0:
+        raise ValueError(f"Expected triangle pulses per batch to divide into 3 groups, got {num_tri}")
+
+    if num_ref <= 0:
+        raise ValueError(f"Expected reference pulses in each batch, got {num_ref}")
 
     # Phase encoding index if zero padding included
     n2 = args.n2 if args.n2 is not None else n1
@@ -318,7 +341,6 @@ def main():
         shutil.copyfile(args.npz_file, destination)
 
     # Fixed Parameters
-    dwell_time = 5
     roPts = 50000
     roTime = np.arange(0, dwell_time * roPts, dwell_time)
 

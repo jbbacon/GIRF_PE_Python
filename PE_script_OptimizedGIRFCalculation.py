@@ -9,7 +9,6 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 from help_functions_GIRF import display_girf_magnitude, read_multi_files_np, resamp_gradients, calculate_output_gradient_optimized_spherical
-from scipy.interpolate import CubicSpline
 from matplotlib.widgets import Button
 import argparse
 import sys
@@ -30,9 +29,9 @@ parser.add_argument('--order', type=int, default=1, help='Order of the Spherical
 parser.add_argument('--save_path', type=str, default=None, help='Optional path to save output files. It will default to a results folder inside the input folder.')
 parser.add_argument('--n', type=int, default=6, help='Number of cutoff points to account for ringing effects.')
 parser.add_argument('--f', type=int, default=29999, help='Number of data points to include (resolution vs noise tradeoff).')
-parser.add_argument('--min_thresh', type=float, default=0.0001, help='Minimum threshold for voxel selection. (Increase to exclude more).')
+parser.add_argument('--min_thresh', type=float, default=0.0005, help='Minimum threshold for voxel selection. (Increase to exclude more).')
 parser.add_argument('--max_thresh', type=float, default=0.02, help='Maximum threshold for voxel selection. (Increase to exclude more).')
-parser.add_argument('--regularizer', type=float, default=1e-6, help='Tikhonov regulizer strength')
+parser.add_argument('--regularizer', type=float, default=0, help='Tikhonov regulizer strength')
 
 args = parser.parse_args()
 
@@ -65,14 +64,15 @@ def load_parameters(json_file):
     
     with open(json_file, 'r') as f:
         data = json.load(f)
-    if all(k in data for k in ['triangular_amplitudes', 'n', 'slice_offsets', 'fov']):
+    if all(k in data for k in ['triangular_amplitudes', 'n', 'slice_offsets', 'fov', 'adc_dead_time']):
         slice_offsets = data['slice_offsets']
         fov = data['fov']
-        return slice_offsets, fov
+        adc_dead_time = data['adc_dead_time']*1e6 #convert to microseconds
+        return slice_offsets, fov, adc_dead_time
     else:
         raise KeyError("JSON missing required keys.")
 
-slice_offsets, fov= load_parameters(json_file)
+slice_offsets, fov, adc_dead_time = load_parameters(json_file)
 
 #Preparation to load the correct files from the data_path
 signs=[]
@@ -141,8 +141,7 @@ fn_gradient = os.path.join(full_data_path, fn_gradient)
 # Fixed parameters
 params = {
     'gammabar': 42.576e3,  # in Hz/mT  
-    'gradRasterTime': 10,  # in microseconds
-    'adcDwellTime': 5      # in microseconds
+    'gradRasterTime': 10,  # in microseconds   
 }
 
 # Load necessary files
@@ -184,6 +183,7 @@ with np.load(fn_slice4_pos) as slice_data:
 params['roPts'] = f-n # Number of points, tradeoff between reoslution and noise
 params['nRep'] = raw_sig_s1_pos.shape[1]   # Number of repetitions, this refers to number of PE 
 params['nGradAmp'] = raw_sig_s1_pos.shape[2]  # Number of gradient blips (18)
+params['adcDwellTime'] = dwell_time
 params['slicePos1'] = slice_offset1
 params['slicePos2'] = slice_offset2 
 params['slicePos3'] = slice_offset3
@@ -193,7 +193,7 @@ params['slicePos4'] = slice_offset4     # distance of slices from isocenter in m
 def select_voxels(refmax, x, min_threshold = 0.01, max_threshold=0.01):
     """
     Voxel Selection based on the maximum and minimum values of the reference signal across repetitions.
-    Red borders indicate voxels that are above the threshold.
+    Orange borders indicate voxels that are above the threshold.
     Green borders indicate voxels that are selected for GIRF calculation.
     Allows for visual inspection of the FID and exclusion of voxels with low signal or potential artifacts.
 
@@ -206,50 +206,66 @@ def select_voxels(refmax, x, min_threshold = 0.01, max_threshold=0.01):
     Returns:
         flat_indices (list): List of selected voxel indices.
     """
-    max1 = []
-    min1=[]
-    for i in range(n2*n2):
-        max1.append(max(np.abs(refmax[:, i])))
-        min1.append(min(np.abs(refmax[:, i])))
-    max1 = np.reshape(max1, (n2, n2))
-    min1 = np.reshape(min1, (n2, n2))
+    abs_ref = np.abs(refmax)
+    max1 = np.max(abs_ref, axis=0).reshape(n2, n2)
+    min1 = np.min(abs_ref, axis=0).reshape(n2, n2)
     mask = (max1 > max_threshold/2) & (min1 > min_threshold/2)
     selected_indices = [tuple(idx) for idx in np.argwhere(mask)]
-
-    padded_mask = np.pad(mask, 1, mode='constant', constant_values=False)
 
     confirmed = {'done': False}
 
     fig, axs = plt.subplots(n2, n2, figsize=(8, 8))
-    plt.subplots_adjust(wspace=0.05, hspace=0.05, bottom=0.1)
-    fig.suptitle(f'Voxel Selection Slice {signs[x]}{int(abs_mm[x]*1000)}{gradientAxis}',fontsize=14)
+    plt.subplots_adjust(wspace=0.03, hspace=0.03, bottom=0.12, top=0.92)
+    fig.patch.set_facecolor('white')
+    fig.suptitle(f'Voxel selection: Slice {signs[x]}{int(abs_mm[x]*1000)}{gradientAxis}', fontsize=14)
+    fig.text(
+        0.5, 0.085,
+        'Orange outline: threshold suggestion    Green outline: selected for GIRF calculation',
+        ha='center',
+        va='center',
+        fontsize=9,
+        color='0.25'
+    )
 
     voxel_map = {}
+    plot_stride = max(1, refmax.shape[0] // 2500)
     for i in range(n2):
         for j in range(n2):
             idx = i * n2 + j
             ax = axs[i, j]
             voxel_map[ax] = (i, j)
-            ax.plot(np.abs(refmax[:, idx]), color='blue', linewidth=0.4)
+            trace = abs_ref[::plot_stride, idx]
+            peak = np.max(trace)
+            if peak > 0:
+                trace = trace / peak
+
+            ax.set_facecolor('#fff8f4' if mask[i, j] else '#f5f6f7')
+            ax.plot(
+                trace,
+                color='#1f4e79' if mask[i, j] else '#8a8f98',
+                linewidth=0.7 if mask[i, j] else 0.5,
+                alpha=0.95 if mask[i, j] else 0.65
+            )
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_ylim(-0.01, max_threshold*2)
+            ax.set_ylim(-0.05, 1.05)
+            for spine in ax.spines.values():
+                spine.set_color('#d5d8dc')
+                spine.set_linewidth(0.6)
 
-            # Draw red outline if part of the mask
-            pi, pj = i + 1, j + 1
+            # Draw orange outline if part of the automatic threshold suggestion.
             if mask[i, j]:
-                if not padded_mask[pi - 1, pj]:
-                    ax.plot([0, 1], [1, 1], transform=ax.transAxes, color='red', linewidth = 3)
-                if not padded_mask[pi + 1, pj]:
-                    ax.plot([0, 1], [0, 0], transform=ax.transAxes, color='red', linewidth = 3)
-                if not padded_mask[pi, pj - 1]:
-                    ax.plot([0, 0], [0, 1], transform=ax.transAxes, color='red', linewidth = 3)
-                if not padded_mask[pi, pj + 1]:
-                    ax.plot([1, 1], [0, 1], transform=ax.transAxes, color='red', linewidth = 3)
+                ax.plot(
+                    [0, 1, 1, 0, 0],
+                    [0, 0, 1, 1, 0],
+                    transform=ax.transAxes,
+                    color='#d95f02',
+                    linewidth=2.0
+                )
                 
             if (i, j) in selected_indices:
                 rect = plt.Rectangle((0, 0), 1, 1, transform=ax.transAxes,
-                                    color='green', linewidth=4, fill=False)
+                                    color='#1b9e77', linewidth=4, fill=False)
                 ax.add_patch(rect)
 
     def on_click(event):
@@ -265,7 +281,7 @@ def select_voxels(refmax, x, min_threshold = 0.01, max_threshold=0.01):
                     # Select: add to list and draw green box
                     selected_indices.append((i, j))
                     rect = plt.Rectangle((0, 0), 1, 1, transform=ax.transAxes,
-                                        color='green', linewidth=6, fill=False)
+                                        color='#1b9e77', linewidth=4, fill=False)
                     ax.add_patch(rect)
                 fig.canvas.draw()
                 break
@@ -296,21 +312,26 @@ flat2 = select_voxels(refmax =refmax2, x=1 ,min_threshold=min_threshold, max_thr
 flat3 = select_voxels(refmax =refmax3, x=2 ,min_threshold=min_threshold, max_threshold=max_threshold)
 flat4 = select_voxels(refmax =refmax4, x=3 ,min_threshold=min_threshold, max_threshold=max_threshold)
 
-
 # Resample gradients using the helper function `resamp_gradients`
 gResamp, roTime = resamp_gradients(grad_in_all, params)
 
-# The nominal starting time of the blips is 2000us after ADC starts
-timeShift = 1990 - n*params['adcDwellTime'] # in microseconds (1990 is used not 2000 due to ADC calibration )
+# The triangular blips start 2000us after the sequence block starts.
+# The ADC readout starts after adc_dead_time, and the first n samples are trimmed.
+timeShift = 2000 - adc_dead_time - n*params['adcDwellTime'] - 0.5*params['adcDwellTime']
+
+# in microseconds (2ms delay - adc_dead_time - points removed at start of FID)
 if timeShift < 0:
     raise ValueError("Error: timeShift is negative. Check value of n.")
 
-gradInput = np.roll(gResamp, int(timeShift / params['adcDwellTime']), axis=0)
+freqFull = np.fft.fftshift(np.fft.fftfreq(f-n, params['adcDwellTime']/1e6))
 
 
-# Perform FFT, shift the zero frequency to the center, and replicate across nPE
-gradInputFT = np.fft.fftshift(np.fft.fft(np.fft.fftshift(gradInput, axes=0), axis=0), axes=0)  # [nRO, nGradAmp]
-gradInputFT = np.tile(gradInputFT[:, :, np.newaxis], (1, 1, 1))
+# Perform FFT, then apply the input delay as a frequency-domain phase ramp.
+gradInputFT = np.fft.fftshift(np.fft.fft(np.fft.fftshift(gResamp, axes=0), axis=0), axes=0)  # [nRO, nGradAmp]
+input_delay_seconds = timeShift / 1e6
+input_delay_phase = np.exp(-1j * 2 * np.pi * freqFull[:, np.newaxis] * input_delay_seconds)
+gradInputFT = gradInputFT * input_delay_phase
+gradInputFT = gradInputFT[:, :, np.newaxis]
 
 
 rawSigS1_POS = np.transpose(raw_sig_s1_pos, (0, 2, 1))  # [nRO, nGradAmp, nRep]
@@ -332,29 +353,28 @@ coeffs, coeffsFT = calculate_output_gradient_optimized_spherical(rawSigS1_POS, r
 
 girfs=[]
 
-plt.figure(figsize=(6,4))
+psd = np.abs(gradInputFT)**2
+max_power = np.max(psd)
+epsilon= max_power*regularizer #Prepares Tikhinov Regularizer
+denominator = np.sum(np.abs(gradInputFT[:,:, :])**2, axis=1)+epsilon
+
+dispFreqRange = np.array([-30000, 30000])  # in unit of HZ
+lbl = ['B0', 'x', 'y', 'z', 'xy', 'zy', '3z**2 - r**2', 'xz', 'x**2 - y**2', 'y(3x**2 - y**2)', 'xyz', 'y(5z**2 - r**2)', '5z**3 - 3zr**2', 'x(5z**2 - r**2)', 'z(x**2 - y**2)','x * (x**2 - 3y**2)']
+
+if Plotting:
+    plt.figure(figsize=(6,4))
+    
 for i in range(len(coeffs[0,0,:])):
-
-    psd = np.abs(gradInputFT)**2
-    max_power = np.max(psd)
-    epsilon= max_power*regularizer #Prepares Tikhinov Regularizer
-
     #Performs GIRF calcualiton 
     numerator = np.sum(coeffsFT[:,:,i:i+1] * np.conj(gradInputFT[:,:, :]), axis = 1)
-    denominator = np.sum(np.abs(gradInputFT[:,:, :])**2, axis=1)+epsilon
     GIRF_FT = numerator/(denominator)
 
-    freqFull = np.fft.fftshift(np.fft.fftfreq(f-n, params['adcDwellTime']/1e6))
-
-    dispFreqRange = np.array([-30000, 30000])  # in unit of HZ
-    lbl = ['B0', 'x', 'y', 'z', 'xy', 'zy', '3z**2 - r**2', 'xz', 'x**2 - y**2', 'y(3x**2 - y**2)', 'xyz', 'y(5z**2 - r**2)', '5z**3 - 3zr**2', 'x(5z**2 - r**2)', 'z(x**2 - y**2)','x * (x**2 - 3y**2)']
-
-    display_girf_magnitude(GIRF_FT, freqFull, dispFreqRange, label=lbl[i])
-
     girfs.append(GIRF_FT)
+    
+    if Plotting:
+        display_girf_magnitude(GIRF_FT, freqFull, dispFreqRange, label=lbl[i])
 
-
-if Plotting ==True:
+if Plotting:
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
     plt.tight_layout()
     plt.show()

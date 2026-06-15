@@ -40,6 +40,9 @@ import json
 args.output.mkdir(exist_ok=True, parents=True)
 
 Nx = Ny = args.n
+if Nx % 2 == 0:
+    print('n must be odd to have a center point in the elliptical phase encoding scheme')
+    sys.exit()
 fov = args.fov
 flipAngle = args.flip_angle
 slice_thickness = args.slice_thickness/1000
@@ -104,7 +107,8 @@ def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
             'n': Nx,  # Store the number of phase encode steps (n)
             'slice_offsets': slice_offsets,
             'dwell' : dwell_time,
-            'fov': fov
+            'fov': fov,
+            'adc_dead_time': system.adc_dead_time
         }
         
         os.makedirs(output_folder, exist_ok=True)
@@ -112,7 +116,7 @@ def save_parameters(triangular_amplitudes, Nx, output_folder, save_flag):
         with open(output_folder / f'parameters_{args.direction}.json', 'w') as fp:
             json.dump(data, fp)
 
-        print(f"Parameters saved to {output_folder / 'parameters.json'}")
+        print(f"Parameters saved to {output_folder / f'parameters_{args.direction}.json'}")
     else:
         print("Save flag is set to False. Skipping saving tof parameters.")
 
@@ -313,7 +317,7 @@ triangular_amplitudes = [
 ]
 
 # check for phase wrap around
-if max(triangular_amplitudes)*42.576e6*max(slice_offsets)*dwell_time/1000 > 0.5:
+if max(triangular_amplitudes)*42.576e6*max(abs(s) for s in slice_offsets)*dwell_time/1000 > 0.5:
     print('Phase Error: Reduce Maximum Triangular Gradient, Slice Offset or Dwell Time')
     sys.exit()
 
