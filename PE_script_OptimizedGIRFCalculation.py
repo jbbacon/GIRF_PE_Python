@@ -318,21 +318,17 @@ gResamp, roTime = resamp_gradients(grad_in_all, params)
 # The triangular blips start 2000us after the sequence block starts.
 # The ADC readout starts after adc_dead_time, and the first n samples are trimmed.
 timeShift = 2000 - adc_dead_time - n*params['adcDwellTime'] - 0.5*params['adcDwellTime']
-
 # in microseconds (2ms delay - adc_dead_time - points removed at start of FID)
 if timeShift < 0:
     raise ValueError("Error: timeShift is negative. Check value of n.")
 
 freqFull = np.fft.fftshift(np.fft.fftfreq(f-n, params['adcDwellTime']/1e6))
-
-
 # Perform FFT, then apply the input delay as a frequency-domain phase ramp.
 gradInputFT = np.fft.fftshift(np.fft.fft(np.fft.fftshift(gResamp, axes=0), axis=0), axes=0)  # [nRO, nGradAmp]
 input_delay_seconds = timeShift / 1e6
 input_delay_phase = np.exp(-1j * 2 * np.pi * freqFull[:, np.newaxis] * input_delay_seconds)
 gradInputFT = gradInputFT * input_delay_phase
 gradInputFT = gradInputFT[:, :, np.newaxis]
-
 
 rawSigS1_POS = np.transpose(raw_sig_s1_pos, (0, 2, 1))  # [nRO, nGradAmp, nRep]
 rawSigS1_NEG = np.transpose(raw_sig_s1_neg, (0, 2, 1))
@@ -342,7 +338,6 @@ rawSigS3_POS = np.transpose(raw_sig_s3_pos, (0, 2, 1))  # [nRO, nGradAmp, nRep]
 rawSigS3_NEG = np.transpose(raw_sig_s3_neg, (0, 2, 1))
 rawSigS4_POS = np.transpose(raw_sig_s4_pos, (0, 2, 1))
 rawSigS4_NEG = np.transpose(raw_sig_s4_neg, (0, 2, 1))
-
 
 # Performs the calcualtion of the output gradient coefficients using the helper function `calculate_output_gradient_optimized_spherical`.
 # This function takes in the raw signals, reference signals, and gradient inputs, and computes the coefficients for the spherical harmonic expansion of the GIRF. 

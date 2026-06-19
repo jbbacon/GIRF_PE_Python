@@ -106,6 +106,7 @@ def calculate_output_gradient_optimized_spherical(sigS1_POS, sigS1_NEG, sigS2_PO
     
     # Compute the temporal derivative of the phase of the signals
     # unwrap is used to handle phase jumps
+    
     sigS1Diff_POS = np.gradient(np.unwrap(np.angle(sigS1Corrected_POS), axis=0), axis=0) / (params['adcDwellTime'] / 1e6)
     sigS1Diff_NEG = np.gradient(np.unwrap(np.angle(sigS1Corrected_NEG), axis=0), axis=0) / (params['adcDwellTime'] / 1e6)
     sigS2Diff_POS = np.gradient(np.unwrap(np.angle(sigS2Corrected_POS), axis=0), axis=0) / (params['adcDwellTime'] / 1e6)
@@ -118,7 +119,7 @@ def calculate_output_gradient_optimized_spherical(sigS1_POS, sigS1_NEG, sigS2_PO
     sigS1Diff = (sigS1Diff_POS - sigS1Diff_NEG) / 2
     sigS2Diff = (sigS2Diff_POS - sigS2Diff_NEG) / 2
     sigS3Diff = (sigS3Diff_POS - sigS3Diff_NEG) / 2
-    sigS4Diff = (sigS4Diff_POS - sigS4Diff_NEG) / 2
+    sigS4Diff = (sigS4Diff_POS - sigS4Diff_NEG) / 2 
 
     def create_df(x_val, valid_indices):
         rows = []

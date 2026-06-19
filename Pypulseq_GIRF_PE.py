@@ -143,7 +143,8 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
             apodization=0.5,
             time_bw_product=4,
             system=system,
-            return_gz=True
+            return_gz=True, 
+            delay = system.rf_dead_time
         )
         gz.channel = directions[0]
         gzReph.channel = directions[0]
@@ -154,7 +155,7 @@ def ref(seq, system, slice_offsets, directions, log_file, batch_index, save_flag
         gyPE = pp.make_trapezoid(channel=directions[2], area=(k - (Ny - 1)/2) * deltak,
                                  duration=pp.calc_duration(gzReph), system=system)
 
-        adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system)
+        adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system, delay= system.adc_dead_time)
         gz_spoil = pp.make_trapezoid(channel=gz.channel, area=-gz.area / 2, system=system)
 
         #SS
@@ -209,7 +210,8 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
             apodization=0.5,
             time_bw_product=4,
             system=system,
-            return_gz=True
+            return_gz=True,
+            delay= system.rf_dead_time
         )
         gz.channel = directions[0]
         gzReph.channel = directions[0]
@@ -220,7 +222,7 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
         gyPE = pp.make_trapezoid(channel=directions[2], area=(k - (Ny - 1)/2) * deltak,
                                  duration=pp.calc_duration(gzReph), system=system)
 
-        adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system)
+        adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system, delay= system.adc_dead_time)
         grad_spoilz = pp.make_trapezoid(channel=directions[0], area=-gz.area / 2, system=system)
         grad_triangular = pp.make_trapezoid(
             channel=directions[0],
