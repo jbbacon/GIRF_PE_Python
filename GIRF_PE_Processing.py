@@ -105,6 +105,8 @@ def main():
 
     triangular_amplitudes, n1, slice_offsets, dwell_time= load_parameters(json_file)
     
+    #Error Checks
+    
     if len(slice_offsets) != 4:
         raise ValueError(f"Expected 4 slice offsets, got {len(slice_offsets)}")
 
@@ -345,6 +347,7 @@ def main():
     roTime = np.arange(0, dwell_time * roPts, dwell_time)
 
     # Process the 4 slices one by one to manage memory usage, saving outputs after each slice is processed
+    # 4 is the number of offset slices
     for idx in range(4):
         print(f'Processing Slice {idx+1}/4')
 
@@ -356,9 +359,11 @@ def main():
         n_vox = n2 * n2
 
         # --- Reference output ---
+        # 6 References (1 reference per every 3 triangle pulses)
         ref = np.empty((50000, n_vox, 6), dtype=dtype)
 
         # Process each of the 6 batches separately to manage memory usage, then combine into final ref array for output
+        # 6 References (1 reference per every 3 triangle pulses)
         for b in range(6):
             batch_offset = b * batch_size
 
@@ -390,13 +395,15 @@ def main():
         gc.collect()
 
         # --- Positive output ---
+        # 18 triangular blips
         positive = np.empty((50000, n_vox, 18), dtype=dtype)
 
         tri_counter = 0
         # Process the positive triangle data in batches to manage memory usage
+        # 6 batches (batch is one ref and three triangle pulses)
         for b in range(6):
             batch_offset = b * batch_size
-
+            # 4 is slice offsets 
             ref_slice = img_obj[:, idx + batch_offset : num_ref + batch_offset : 4, :, :]
             ref_combined_b, weight = process_reference_data(
                 ref_slice, n1, n2, coils, ft_filter=filter

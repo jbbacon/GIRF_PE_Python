@@ -39,6 +39,7 @@ import json
 # Make output directory
 args.output.mkdir(exist_ok=True, parents=True)
 
+#Set intital parameters from argparse
 Nx = Ny = args.n
 if Nx % 2 == 0:
     print('n must be odd to have a center point in the elliptical phase encoding scheme')
@@ -58,6 +59,7 @@ dwell_time = args.dwell_time
 center = (Nx - 1) / 2
 max_radius = center 
 
+#Elliptical phase encoding
 valid_phase_encodes = [
     (j, k) for j in range(Nx) for k in range(Ny)
     if np.sqrt((j - center) ** 2 + (k - center) ** 2) <= max_radius
@@ -224,6 +226,8 @@ def triangle(seq, system, triangular_amplitude_mT_per_m, slice_offsets, directio
 
         adc = pp.make_adc(num_samples=50000, dwell=dwell_time, system=system, delay= system.adc_dead_time)
         grad_spoilz = pp.make_trapezoid(channel=directions[0], area=-gz.area / 2, system=system)
+        
+        #Swap out grad_triangular for any other waveform eg Chirp 
         grad_triangular = pp.make_trapezoid(
             channel=directions[0],
             amplitude=amplitude_sign * triangular_amplitude_hz_per_m,

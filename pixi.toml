@@ -2,7 +2,7 @@
 authors = ["James Bacon <james.bacon@seh.ox.ac.uk>", "William Clarke <william.clarke@ndcn.ox.ac.uk>"]
 channels = ["conda-forge", "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public/"]
 name = "GIRF_PE_Python"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64", "win-64"]
 version = "0.1.0"
 
 [tasks]
