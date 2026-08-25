@@ -84,7 +84,8 @@ Example processed data from a 3T Siemens Connectome scanner can be found here: [
 
 ## Citation 
 
-Please cite the following if you use this repository for your research
+Please cite atleast one of the following if you use this repository for your research
 
-J. B.Bacon, P.Jezzard, and W. T.Clarke, “MR Spectroscopy Without Water Suppression Using the Gradient Impulse Response Function,” Magnetic Resonance in Medicine (2026): 1–12, https://doi.org/10.1002/mrm.70383.
+1. **Preprint**: J. B.Bacon, R.Rizzo, S. M.Finney, C. J.Evans, F.Fasano, P.Jezzard, W. T. Clarke, "Open-Source Framework for Measurement of the Gradient Impulse Response Function" bioRxiv 2026.08.24.745510; doi: https://doi.org/10.64898/2026.08.24.745510
+2. J. B.Bacon, P.Jezzard, and W. T.Clarke, “MR Spectroscopy Without Water Suppression Using the Gradient Impulse Response Function,” Magnetic Resonance in Medicine (2026): 1–12, https://doi.org/10.1002/mrm.70383.
 
