@@ -1,5 +1,5 @@
 #Run as pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_order_log_x.csv --json_file /path/to/parameters.json --npz_file /path/to/InputGradients.npz --direction x --output_folder /path/to/output/folder
-# Code for processing Raw twix data
+# Code for processing raw Twix or ISMRMRD HDF5 data
 # Includes FT mapping, coil combination, and output formatting for Ref, Positive, and Negative datasets
 
 
@@ -16,7 +16,8 @@ import gc
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process MRI raw data.")
-    parser.add_argument("--mri_file", type=str, required=True, help="Path to the Siemens .dat file")
+    parser.add_argument("--mri_file", type=str, required=True, help="Path to the Twix .dat or ISMRMRD HDF5 file")
+    parser.add_argument("--mri_file_type", choices=["twix", "ismrmrd"], default="twix",help="Raw data format (default: twix)")
     parser.add_argument("--csv_file", type=str, required=True, help="Path to the pulse order log CSV file")
     parser.add_argument("--json_file", type=str, required=True, help="Path to the parameters JSON file")
     parser.add_argument('--npz_file', type=str, required=True, help="Path to the Input Gradient .npz file")
@@ -28,6 +29,45 @@ def parse_args():
     parser.add_argument("--n2", type=int, default= None, help="Final matrix size after zero padding")
     parser.add_argument("--dtype", type=str, choices=["complex128", "complex64"], default="complex128",help="Data type for processing (default: complex128), reduce for large file sizes")
     return parser.parse_args()
+
+class ISMRMRDArray:
+    """Twix-style slicing of HDF5 acquisitions stored in pulse-log order.
+
+    Each 50000-sample pulse is stored whole or in consecutive equal chunks.
+    """
+
+    def __init__(self, filename):
+        import h5py
+
+        self.filename = filename
+        with h5py.File(filename, 'r') as f:
+            acquisitions = f['dataset/data']
+            headers = np.empty(len(acquisitions), dtype=acquisitions.dtype['head'])
+            # Read one full record at a time: selecting only 'head' can leak
+            # the variable-length sample buffers in HDF5 compound conversion.
+            for i in range(len(acquisitions)):
+                headers[i] = acquisitions[i]['head']
+        # Exclude noise and auxiliary scans, as for Twix image data.
+        flags = headers['flags']
+        excluded = sum(1 << (flag - 1) for flag in (19, 23, 24, 26, 27, 28, 30, 31))
+        calibration_only = ((flags & (1 << 19)) != 0) & ((flags & (1 << 20)) == 0)
+        indices = np.flatnonzero(((flags & excluded) == 0) & ~calibration_only)
+        samples = int(headers['number_of_samples'][indices[0]])
+        chunks = 50000 // samples
+        self.indices = indices.reshape(-1, chunks)
+        self.shape = (chunks, len(self.indices), int(headers['active_channels'][indices[0]]), samples)
+
+    def __getitem__(self, key):
+        import h5py
+
+        pulses = range(*key[1].indices(self.shape[1]))
+        block = np.empty((self.shape[0], len(pulses), *self.shape[2:]), dtype=np.complex64)
+        with h5py.File(self.filename, 'r') as f:
+            for out_idx, pulse in enumerate(pulses):
+                for chunk, acq_idx in enumerate(self.indices[pulse]):
+                    raw = f['dataset/data'][int(acq_idx)]['data']
+                    block[chunk, out_idx] = raw.view(np.complex64).reshape(self.shape[2:])
+        return block[key[0], :, key[2], key[3]]
 
 
 def main():
@@ -46,11 +86,14 @@ def main():
     if args.hann_filter and args.csi_filter:
         raise ValueError("Choose only one of --hann_filter or --csi_filter, not both.")
 
-    # Load MRI data using twixtools
-    x = twixtools.map_twix(mri_file)
-    img_obj = x[-1]['image']
-    img_obj.flags['squeeze_singletons'] = True
-    img_obj.flags['squeeze_ave_dims'] = False
+    if args.mri_file_type == "twix":
+        # Load MRI data using twixtools
+        x = twixtools.map_twix(mri_file)
+        img_obj = x[-1]['image']
+        img_obj.flags['squeeze_singletons'] = True
+        img_obj.flags['squeeze_ave_dims'] = False
+    else:
+        img_obj = ISMRMRDArray(mri_file)
  
 
     def analyze_batches_and_types(csv_filename):

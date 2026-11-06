@@ -35,7 +35,7 @@ Inspired by https://cds.ismrm.org/protected/22MProceedings/PDFfiles/0641.html an
 
 Notes: The ADC event has 50000 points, when on the scanner this should be split up into readout events of length of 5000. Lib Balance should be disabled on the scanner. Scanner requires pulseq compiler >= 1.4.3.
 
-Choice of phantom is important; we recommend a spherical water based phantom with a small diameter (~10cm). This must be spectroscopically simple (contain only one chemical shift environment). Full phantom details can be found at https://onlinelibrary.wiley.com/doi/10.1002/mrm.70383.
+Choice of phantom is important; we recommend a spherical water based phantom. This must be spectroscopically simple (contain only one chemical shift environment). Full phantom details can be found at https://onlinelibrary.wiley.com/doi/10.1002/mrm.70383.
 
 Run the script through terminal as
 ```
@@ -49,7 +49,7 @@ The function will output the .seq file, a .csv containing information about the 
 
 ---
 
-**GIRF_PE_Processing.py** - This processes the raw scanner data (currently only Siemens) performing 2D Fourier Transform, coil combination and arranging the data into a sensible format. Zero padding can be defined before the Fourier Transform to improve the spatial resolution.
+**GIRF_PE_Processing.py** - This processes the raw scanner data (Siemens Twix or ISMRMRD HDF5) performing 2D Fourier Transform, coil combination and arranging the data into a sensible format. Zero padding can be defined before the Fourier Transform.
 
 Run the script through terminal as
 ```
@@ -59,6 +59,8 @@ pixi run proc-data --mri_file /path/to/mri_data.dat --csv_file /path/to/pulse_or
 
 --direction x --output_folder /path/to/output/folder
 ```
+
+Siemens Twix data is the default input. For ISMRMRD HDF5, add `--mri_file_type ismrmrd` and provide the HDF5 file to `--mri_file`. The conversion from vendor to ISMRMRD file formats must be performed sepearetly from this repo. 
 
 This will need to be run 3 times for the 3 directions. Options for 2D filters and zero padding can be applied before Fourier Transform.
 
@@ -72,7 +74,7 @@ pixi run get-girf --data_path /path/to/data --direction x --json_file /path/to/j
 ```
 Other tags to adjust the plotting, order of the spherical harmonics, file saving, the start point and end point of the data, thresholding for voxel selection.
 
-For troubleshooting reduce the number of points (--f tag), or increase/decrease the max/min threshold.
+For troubleshooting, reduce the number of acquired time points used in the GIRF calculation (`--f`) to trade frequency resolution for potentially improved SNR, or adjust the voxel-selection thresholds (`--min_thresh` and `--max_thresh`)
 
 ---
 
